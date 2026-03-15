@@ -55,10 +55,6 @@ async def avatar(interaction: discord.Interaction, member: discord.Member = None
     member = member or interaction.user
     await interaction.followup.send(member.display_avatar.url)
 
-class HelpView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
     @discord.ui.button(label="Utility", style=discord.ButtonStyle.primary, emoji="⚡")
     async def utility_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         embed = discord.Embed(
@@ -642,11 +638,7 @@ import discord
 from discord.ext import commands
 
 # ---------- CLOSE TICKET VIEW ----------
-class CloseTicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.red)
+@discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.red)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🔒 Closing this ticket...", ephemeral=True)
         await interaction.channel.delete()
@@ -774,11 +766,6 @@ async def ticketpanel(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=TicketPanelView())
 
-@bot.event
-async def on_ready():
-    bot.add_view(TicketPanelView())
-    bot.add_view(CloseTicketView())
-
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
@@ -793,5 +780,4 @@ async def on_ready():
         )
     )
 
-    print(f"Pulse is online as {bot.user}")
 bot.run(os.getenv("TOKEN"))
