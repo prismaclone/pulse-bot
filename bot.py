@@ -399,4 +399,141 @@ async def meme(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+import discord
+from discord.ext import commands
+
+class HelpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Utility", emoji="⚡", style=discord.ButtonStyle.blurple)
+    async def utility_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚡ Utility Commands",
+            description="Useful server and general commands.",
+            color=discord.Color.gold()
+        )
+        embed.add_field(
+            name="Commands",
+            value=(
+                "`/help` - Show the help menu\n"
+                "`/ping` - Check bot latency\n"
+                "`/hello` - Say hello\n"
+                "`/uptime` - Show bot uptime\n"
+                "`/botinfo` - Info about Pulse\n"
+                "`/serverinfo` - View server info\n"
+                "`/userinfo` - View user info\n"
+                "`/avatar` - Show a user's avatar"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Pulse • Utility commands")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Fun", emoji="🎉", style=discord.ButtonStyle.green)
+    async def fun_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎉 Fun Commands",
+            description="Fun little commands for the server.",
+            color=discord.Color.green()
+        )
+        embed.add_field(
+            name="Commands",
+            value=(
+                "`/meme` - Get a random meme\n"
+                "`/8ball` - Ask the magic 8-ball\n"
+                "`/coinflip` - Flip a coin\n"
+                "`/choose` - Let Pulse choose for you\n"
+                "`/rate` - Rate something"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Pulse • Fun commands")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Mod", emoji="🛡️", style=discord.ButtonStyle.red)
+    async def mod_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🛡️ Moderation Commands",
+            description="Commands for moderation and server management.",
+            color=discord.Color.red()
+        )
+        embed.add_field(
+            name="Commands",
+            value=(
+                "`/clear` - Delete messages\n"
+                "`/embed` - Send a custom embed\n"
+                "`/suggest` - Send a suggestion\n"
+                "`/remind` - Set a reminder"
+            ),
+            inline=False
+        )
+        embed.set_footer(text="Pulse • Moderation tools")
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Home", emoji="🏠", style=discord.ButtonStyle.gray, row=1)
+    async def home_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚡ Pulse Help Menu",
+            description=(
+                "Welcome to **Pulse's command center**.\n\n"
+                "Use the buttons below to browse command categories."
+            ),
+            color=discord.Color.gold()
+        )
+
+        embed.add_field(
+            name="⚡ Utility",
+            value="Profiles, server info, and helpful tools.",
+            inline=False
+        )
+        embed.add_field(
+            name="🎉 Fun",
+            value="Memes, games, and random fun commands.",
+            inline=False
+        )
+        embed.add_field(
+            name="🛡️ Mod",
+            value="Moderation and server management tools.",
+            inline=False
+        )
+
+        embed.set_thumbnail(url=interaction.client.user.display_avatar.url)
+        embed.set_footer(text="Pulse • Managing everything here ⚡")
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+@bot.tree.command(name="help", description="Show the Pulse help menu")
+async def help_command(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="⚡ Pulse Help Menu",
+        description=(
+            "Welcome to **Pulse's command center**.\n\n"
+            "Use the buttons below to browse command categories."
+        ),
+        color=discord.Color.gold()
+    )
+
+    embed.add_field(
+        name="⚡ Utility",
+        value="Profiles, server info, and helpful tools.",
+        inline=False
+    )
+    embed.add_field(
+        name="🎉 Fun",
+        value="Memes, games, and random fun commands.",
+        inline=False
+    )
+    embed.add_field(
+        name="🛡️ Mod",
+        value="Moderation and server management tools.",
+        inline=False
+    )
+
+    embed.set_thumbnail(url=bot.user.display_avatar.url)
+    embed.set_footer(text="Pulse • Managing everything here ⚡")
+
+    await interaction.response.send_message(embed=embed, view=HelpView())
+
 bot.run(os.getenv("TOKEN"))
