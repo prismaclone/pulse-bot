@@ -16,7 +16,7 @@ start_time = datetime.now(timezone.utc)
 
 @bot.event
 async def on_ready():
-    print(f"Pulse is online as {bot.user}")
+    print("on_ready fired")
 
     await bot.change_presence(
         status=discord.Status.online,
@@ -25,10 +25,8 @@ async def on_ready():
             name="Managing everything here ⚡"
         )
     )
-        print("presence set")
-    except Exception as e:
-        print(f"presence error: {e}")
 
+    print("presence set")
     print(f"Pulse is online as {bot.user}")
     
 GUILD_ID = 1414144666651197473
