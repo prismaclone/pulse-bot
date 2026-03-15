@@ -489,4 +489,28 @@ async def help_cmd(interaction: discord.Interaction):
         import traceback
         traceback.print_exc()
 
+import traceback
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    print("APP COMMAND ERROR:")
+    traceback.print_exception(type(error), error, error.__traceback__)
+
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send("Command error occurred.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Command error occurred.", ephemeral=True)
+    except Exception as e:
+        print("FAILED TO SEND ERROR MESSAGE:", e)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print("Sync failed:", e)
+        
 bot.run(os.getenv("TOKEN"))
