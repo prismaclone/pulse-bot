@@ -381,8 +381,16 @@ async def on_ready():
 
     try:
         guild = discord.Object(id=GUILD_ID)
+
+        # copy every global slash command into your test server
+        bot.tree.copy_global_to(guild=guild)
+
         synced = await bot.tree.sync(guild=guild)
         print(f"Synced {len(synced)} command(s) to guild {GUILD_ID}")
+
+        for cmd in synced:
+            print(f"- /{cmd.name}")
+
     except Exception as e:
         print(f"Sync error: {e}")
 
