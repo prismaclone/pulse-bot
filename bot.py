@@ -522,4 +522,59 @@ async def help_command(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=HelpView())
 
+@bot.tree.command(name="serverstats", description="View server statistics")
+async def serverstats(interaction: discord.Interaction):
+
+    guild = interaction.guild
+
+    members = guild.member_count
+    bots = sum(1 for m in guild.members if m.bot)
+    humans = members - bots
+
+    text_channels = len(guild.text_channels)
+    voice_channels = len(guild.voice_channels)
+    roles = len(guild.roles)
+    boosts = guild.premium_subscription_count
+
+    embed = discord.Embed(
+        title=f"📊 {guild.name} Server Stats",
+        color=discord.Color.gold()
+    )
+
+    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+
+    embed.add_field(
+        name="👥 Members",
+        value=f"Total: **{members}**\nHumans: **{humans}**\nBots: **{bots}**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📁 Channels",
+        value=f"Text: **{text_channels}**\nVoice: **{voice_channels}**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="✨ Server",
+        value=f"Roles: **{roles}**\nBoosts: **{boosts}**",
+        inline=True
+    )
+
+    embed.add_field(
+        name="📅 Created",
+        value=guild.created_at.strftime("%B %d, %Y"),
+        inline=False
+    )
+
+    embed.set_footer(text="Pulse • Managing everything here ⚡")
+
+    await interaction.response.send_message(embed=embed)
+
+embed.add_field(
+    name="🚀 Boost Level",
+    value=f"Level {guild.premium_tier}",
+    inline=True
+)
+
 bot.run(os.getenv("TOKEN"))
