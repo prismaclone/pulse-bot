@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -15,33 +16,15 @@ start_time = datetime.now(timezone.utc)
 
 @bot.event
 async def on_ready():
-    print("on_ready fired")
+    print(f"Pulse is online as {bot.user}")
 
-    try:
-        print("adding HelpView")
-        bot.add_view(HelpView())
-        print("adding TicketPanelView")
-        bot.add_view(TicketPanelView())
-        print("adding CloseTicketView")
-        bot.add_view(CloseTicketView())
-        print("views added")
-    except Exception as e:
-        print(f"view error: {e}")
-
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"sync error: {e}")
-
-    try:
-        await bot.change_presence(
-            status=discord.Status.online,
-            activity=discord.Activity(
-                type=discord.ActivityType.watching,
-                name="Managing everything here ⚡"
-            )
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="Managing everything here ⚡"
         )
+    )
         print("presence set")
     except Exception as e:
         print(f"presence error: {e}")
