@@ -40,13 +40,68 @@ async def avatar(interaction: discord.Interaction, member: discord.Member = None
     member = member or interaction.user
     await interaction.followup.send(member.display_avatar.url)
 
-@bot.tree.command(name="help", description="Show Pulse commands")
+class HelpView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Utility", style=discord.ButtonStyle.primary, emoji="⚡")
+    async def utility_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="⚡ Pulse Utility Commands",
+            description="Useful server and profile commands.",
+            color=0xFFD43B
+        )
+        embed.add_field(name="/ping", value="Check Pulse latency", inline=False)
+        embed.add_field(name="/hello", value="Say hello", inline=False)
+        embed.add_field(name="/avatar", value="Show a user's avatar", inline=False)
+        embed.add_field(name="/userinfo", value="Show info about a user", inline=False)
+        embed.add_field(name="/serverinfo", value="Show info about the server", inline=False)
+        embed.add_field(name="/say", value="Make Pulse send a message", inline=False)
+        embed.add_field(name="/poll", value="Create a yes/no poll", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Fun", style=discord.ButtonStyle.success, emoji="🎉")
+    async def fun_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🎉 Pulse Fun Commands",
+            description="Fun commands for your server.",
+            color=0xFFD43B
+        )
+        embed.add_field(name="/8ball", value="Ask the magic 8-ball a question", inline=False)
+        embed.add_field(name="/coinflip", value="Flip a coin", inline=False)
+        embed.add_field(name="/meme", value="Get a random meme", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="Mod", style=discord.ButtonStyle.danger, emoji="🛡️")
+    async def mod_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title="🛡️ Pulse Moderation Commands",
+            description="Moderation tools.",
+            color=0xFFD43B
+        )
+        embed.add_field(name="/clear", value="Delete messages", inline=False)
+        embed.add_field(name="/timeout", value="Timeout a member", inline=False)
+        embed.add_field(name="/kick", value="Kick a member", inline=False)
+        embed.add_field(name="/ban", value="Ban a member", inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+@bot.tree.command(name="help", description="Show Pulse help menu")
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(
-        title="⚡ Pulse Commands",
-        description="Here are my current commands:",
+        title="⚡ Pulse Help Menu",
+        description="Use the buttons below to view command categories.",
         color=0xFFD43B
     )
+    embed.add_field(name="Utility", value="Profiles, server tools, and general commands", inline=False)
+    embed.add_field(name="Fun", value="Games and silly commands", inline=False)
+    embed.add_field(name="Mod", value="Moderation tools", inline=False)
+    embed.set_footer(text="Pulse • modern server utility")
+
+    await interaction.response.send_message(embed=embed, view=HelpView())
 
     embed.add_field(name="/ping", value="Check bot latency", inline=False)
     embed.add_field(name="/hello", value="Say hello", inline=False)
