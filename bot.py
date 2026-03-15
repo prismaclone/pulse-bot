@@ -340,25 +340,29 @@ async def rate(interaction: discord.Interaction, thing: str):
     )
 
     await interaction.response.send_message(embed=embed)
+SUGGESTION_CHANNEL_ID = 123456789012345678
 
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: Exception):
-    print(f"APP COMMAND ERROR: {error}")
+@bot.tree.command(name="suggest", description="Send a suggestion")
+async def suggest(interaction: discord.Interaction, suggestion: str):
 
-    try:
-        if not interaction.response.is_done():
-            await interaction.response.send_message(
-                f"Pulse hit an error: {error}",
-                ephemeral=True
-            )
-        else:
-            await interaction.followup.send(
-                f"Pulse hit an error: {error}",
-                ephemeral=True
-            )
-    except Exception as e:
-        print(f"ERROR HANDLER FAILED: {e}")
+    channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
 
-SUGGESTION_CHANNEL_ID = 1482554718147580087  
+    embed = discord.Embed(
+        title="💡 New Suggestion",
+        description=suggestion,
+        color=0xFFD43B
+    )
+
+    embed.set_footer(text=f"Suggested by {interaction.user}")
+
+    message = await channel.send(embed=embed)
+    await message.add_reaction("⬆️")
+    await message.add_reaction("⬇️")
+
+    await interaction.response.send_message(
+        "Your suggestion has been submitted!",
+        ephemeral=True
+    )
+  
 
 bot.run(os.getenv("TOKEN"))
