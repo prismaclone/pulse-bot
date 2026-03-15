@@ -524,31 +524,30 @@ async def help_command(interaction: discord.Interaction):
 
 from datetime import datetime, timezone
 
+from datetime import datetime, timezone
+
 @bot.tree.command(name="serverstats", description="View detailed server statistics")
 async def serverstats(interaction: discord.Interaction):
+
     guild = interaction.guild
 
     total_members = guild.member_count
-    bot_count = sum(1 for member in guild.members if member.bot)
+    bot_count = sum(1 for m in guild.members if m.bot)
     human_count = total_members - bot_count
 
-    text_count = len(guild.text_channels)
-    voice_count = len(guild.voice_channels)
-    category_count = len(guild.categories)
-    role_count = len(guild.roles)
+    text_channels = len(guild.text_channels)
+    voice_channels = len(guild.voice_channels)
+    roles = len(guild.roles)
 
     boosts = guild.premium_subscription_count
     boost_tier = guild.premium_tier
-    owner = guild.owner
 
-    created_at = guild.created_at
-    now = datetime.now(timezone.utc)
-    server_age_days = (now - created_at).days
+    created = guild.created_at
+    age_days = (datetime.now(timezone.utc) - created).days
 
     embed = discord.Embed(
         title=f"📊 {guild.name} Statistics",
-        description="A full look at this server's current stats.",
-        color=discord.Color.gold()
+        color=discord.Color.blurple()
     )
 
     if guild.icon:
@@ -556,49 +555,31 @@ async def serverstats(interaction: discord.Interaction):
 
     embed.add_field(
         name="👥 Members",
-        value=(
-            f"**Total:** {total_members}\n"
-            f"**Humans:** {human_count}\n"
-            f"**Bots:** {bot_count}"
-        ),
+        value=f"Total: {total_members}\nHumans: {human_count}\nBots: {bot_count}",
         inline=True
     )
 
     embed.add_field(
-        name="🗂️ Channels",
-        value=(
-            f"**Text:** {text_count}\n"
-            f"**Voice:** {voice_count}\n"
-            f"**Categories:** {category_count}"
-        ),
+        name="📁 Channels",
+        value=f"Text: {text_channels}\nVoice: {voice_channels}",
         inline=True
     )
 
     embed.add_field(
-        name="✨ Server Info",
-        value=(
-            f"**Roles:** {role_count}\n"
-            f"**Boosts:** {boosts}\n"
-            f"**Boost Tier:** {boost_tier}"
-        ),
+        name="✨ Server",
+        value=f"Roles: {roles}\nBoosts: {boosts}\nTier: {boost_tier}",
         inline=True
     )
 
     embed.add_field(
-        name="👑 Owner",
-        value=f"{owner.mention}",
+        name="📅 Created",
+        value=created.strftime("%B %d, %Y"),
         inline=True
     )
 
     embed.add_field(
-        name="📅 Created On",
-        value=created_at.strftime("%B %d, %Y"),
-        inline=True
-    )
-
-    embed.add_field(
-        name="⏳ Server Age",
-        value=f"**{server_age_days} days old**",
+        name="⏳ Age",
+        value=f"{age_days} days",
         inline=True
     )
 
