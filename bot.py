@@ -673,7 +673,7 @@ class TicketPanelView(discord.ui.View):
         staff_role = discord.utils.get(guild.roles, name="Support Staff")
 
         # Create/find ticket category
-        category = discord.utils.get(guild.categories, name="Tickets")
+        category = discord.utils.get(guild.categories, name="𝚂𝚞𝚙𝚙𝚘𝚛𝚝-𝚃𝚒𝚌𝚔𝚎𝚝𝚜")
         if category is None:
             category = await guild.create_category("Tickets")
 
