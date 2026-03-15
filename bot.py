@@ -13,7 +13,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
 
-
 @bot.event
 async def on_ready():
     bot.add_view(HelpView())
@@ -35,7 +34,7 @@ async def on_ready():
     )
 
     print(f"Pulse is online as {bot.user}")
-       
+    
   synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
