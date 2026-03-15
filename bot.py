@@ -3,6 +3,7 @@ from discord.ext import commands
 import os
 import random
 import asyncio
+import aiohttp
 from datetime import datetime, timezone
 
 intents = discord.Intents.default()
@@ -12,9 +13,30 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
 
-    print(f"Pulse is online as {bot.user}")
+
+@bot.event
+async def on_ready():
+    bot.add_view(HelpView())
+    bot.add_view(TicketPanelView())
+    bot.add_view(CloseTicketView())
+
     try:
         synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="Managing everything here ⚡"
+        )
+    )
+
+    print(f"Pulse is online as {bot.user}")
+       
+  synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Sync error: {e}")
