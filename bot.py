@@ -383,4 +383,21 @@ async def support(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+import aiohttp
+
+@bot.tree.command(name="meme", description="Get a random meme")
+async def meme(interaction: discord.Interaction):
+    async with aiohttp.ClientSession() as session:
+        async with session.get("https://meme-api.com/gimme") as response:
+            data = await response.json()
+
+    embed = discord.Embed(
+        title=data["title"],
+        color=discord.Color.random()
+    )
+    embed.set_image(url=data["url"])
+    embed.set_footer(text=f"👍 {data['ups']} | r/{data['subreddit']}")
+
+    await interaction.response.send_message(embed=embed)
+
 bot.run(os.getenv("TOKEN"))
