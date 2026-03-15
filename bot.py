@@ -512,5 +512,9 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print("Sync failed:", e)
-        
+
+@bot.tree.command(name="ping", description="Test command")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message("pong")
+
 bot.run(os.getenv("TOKEN"))
