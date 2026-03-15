@@ -361,24 +361,4 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
 
 SUGGESTION_CHANNEL_ID = 1482554718147580087  
 
-@bot.tree.command(name="suggest", description="Send a suggestion")
-async def suggest(interaction: discord.Interaction, suggestion: str):
-    channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
-
-    embed = discord.Embed(
-        title="💡 New Suggestion",
-        description=suggestion,
-        color=0xFFD43B
-    )
-    embed.set_footer(text=f"Suggested by {interaction.user}")
-
-    message = await channel.send(embed=embed)
-    await message.add_reaction("⬆️")
-    await message.add_reaction("⬇️")
-
-    await interaction.response.send_message(
-        "Your suggestion has been submitted!",
-        ephemeral=True
-    )
-
 bot.run(os.getenv("TOKEN"))
