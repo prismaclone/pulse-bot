@@ -13,10 +13,9 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
-
 @bot.event
 async def on_ready():
-    print("on_ready fired")
+    print(f"Pulse is online as {bot.user}")
 
     await bot.change_presence(
         status=discord.Status.online,
@@ -25,9 +24,8 @@ async def on_ready():
             name="Managing everything here ⚡"
         )
     )
-
     print("presence set")
-    print(f"Pulse is online as {bot.user}")
+    print(f"pulse is online as {bot.user}")
     
 GUILD_ID = 1414144666651197473
 MY_GUILD = discord.Object(id=GUILD_ID)
