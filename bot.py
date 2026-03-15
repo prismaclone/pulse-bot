@@ -541,7 +541,8 @@ async def serverstats(interaction: discord.Interaction):
         color=discord.Color.gold()
     )
 
-    embed.set_thumbnail(url=guild.icon.url if guild.icon else None)
+    if guild.icon:
+        embed.set_thumbnail(url=guild.icon.url)
 
     embed.add_field(
         name="👥 Members",
