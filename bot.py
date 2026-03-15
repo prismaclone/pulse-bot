@@ -32,11 +32,14 @@ async def ping(interaction: discord.Interaction):
 
 @bot.tree.command(name="hello", description="Say hello")
 async def hello(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Hey {interaction.user.mention} ⚡")
+    await interaction.response.defer()
+    await interaction.followup.send(f"Hey {interaction.user.mention} ⚡")
 
 @bot.tree.command(name="avatar", description="Get a user's avatar")
 async def avatar(interaction: discord.Interaction, member: discord.Member = None):
+    await interaction.response.defer()
+
     member = member or interaction.user
-    await interaction.response.send_message(member.display_avatar.url)
+    await interaction.followup.send(member.display_avatar.url)
 
 bot.run(os.getenv("TOKEN"))
