@@ -4,6 +4,7 @@ import os
 import random
 import asyncio
 import aiohttp
+from discord.ext import commands
 from discord import app_commands
 from datetime import datetime, timezone
 
@@ -14,20 +15,26 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
+
 @bot.event
 async def on_ready():
-    print(f"Pulse is online as {bot.user}")
-
     await bot.change_presence(
         status=discord.Status.online,
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="Managing everything here ⚡"
+            name="the server pulse ⚡"
         )
     )
-    print("presence set")
-    print(f"pulse is online as {bot.user}")
-    
+
+    print(f"Pulse is online as {bot.user}")
+
+    try:
+        guild = discord.Object(id=1414144666651197473)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced {len(synced)} guild command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
+        
 GUILD_ID = 1414144666651197473
 MY_GUILD = discord.Object(id=GUILD_ID)
 
@@ -1030,6 +1037,25 @@ async def slowmode(interaction: discord.Interaction, seconds: int):
     await interaction.response.send_message(
         f"🐢 Slowmode set to **{seconds} seconds**."
     )
-    
+
+TEST_GUILD_ID = 1414144666651197473
+
+intents = discord.Intents.default()
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Pulse is online as {bot.user}")
+
+    try:
+        guild = discord.Object(id=TEST_GUILD_ID)
+        bot.tree.copy_global_to(guild=guild)
+        synced = await bot.tree.sync(guild=guild)
+        print(f"Synced {len(synced)} command(s) to guild {TEST_GUILD_ID}")
+    except Exception as e:
+        print(f"Sync error: {e}")
+        
 print("starting pulse...")
 bot.run(os.getenv("TOKEN"))
