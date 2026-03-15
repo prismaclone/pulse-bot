@@ -587,10 +587,5 @@ async def serverstats(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
-embed.add_field(
-    name="🚀 Boost Level",
-    value=f"Level {guild.premium_tier}",
-    inline=True
-)
 
 bot.run(os.getenv("TOKEN"))
