@@ -296,20 +296,6 @@ async def suggest(interaction: discord.Interaction, suggestion: str):
     await message.add_reaction("⬆️")
     await message.add_reaction("⬇️")
 
-@bot.tree.command(name="suggest", description="Send a suggestion")
-async def suggest(interaction: discord.Interaction, suggestion: str):
-    embed = discord.Embed(
-        title="💡 New Suggestion",
-        description=suggestion,
-        color=0xFFD43B
-    )
-    embed.set_footer(text=f"Suggested by {interaction.user}")
-
-    await interaction.response.send_message(embed=embed)
-    message = await interaction.original_response()
-    await message.add_reaction("⬆️")
-    await message.add_reaction("⬇️")
-
 @bot.tree.command(name="coinflip", description="Flip a coin")
 async def coinflip(interaction: discord.Interaction):
     result = random.choice(["Heads", "Tails"])
