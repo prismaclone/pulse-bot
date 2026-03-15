@@ -15,12 +15,14 @@ start_time = datetime.now(timezone.utc)
 
 @bot.event
 async def on_ready():
+    print("on_ready fired")
+
     bot.add_view(HelpView())
     bot.add_view(TicketPanelView())
     bot.add_view(CloseTicketView())
 
     try:
-        synced = await bot.tree.sync(guild=MY_GUILD)
+        synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Sync error: {e}")
