@@ -341,4 +341,22 @@ async def rate(interaction: discord.Interaction, thing: str):
 
     await interaction.response.send_message(embed=embed)
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: Exception):
+    print(f"APP COMMAND ERROR: {error}")
+
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                f"Pulse hit an error: {error}",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f"Pulse hit an error: {error}",
+                ephemeral=True
+            )
+    except Exception as e:
+        print(f"ERROR HANDLER FAILED: {e}")
+
 bot.run(os.getenv("TOKEN"))
