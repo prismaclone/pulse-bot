@@ -397,34 +397,50 @@ async def support(interaction: discord.Interaction):
 
 import discord
 
-@bot.tree.command(name="setupbotrole", description="Creates a role for the bot with admin permissions")
-async def setupbotrole(interaction: discord.Interaction):
+import discord
+from discord.ext import commands
 
-    guild = interaction.guild
+intents = discord.Intents.default()
+intents.guilds = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+@bot.event
+async def on_guild_join(guild: discord.Guild):
     bot_member = guild.me
 
-    # Check if role already exists
-    existing_role = discord.utils.get(guild.roles, name="Bot Role")
-
-    if existing_role:
-        await interaction.response.send_message("⚠️ Bot role already exists.", ephemeral=True)
+    if bot_member is None:
         return
 
-    # Create role with administrator permissions
-    permissions = discord.Permissions(administrator=True)
+    # Make sure bot can manage roles
+    if not guild.me.guild_permissions.manage_roles:
+        print(f"Missing Manage Roles in {guild.name}")
+        return
 
-    role = await guild.create_role(
-        name="Bot Role",
-        permissions=permissions,
-        reason="Bot setup role"
-    )
+    # Check if role already exists
+    role_name = f"{bot.user.name} Role"
+    existing_role = discord.utils.get(guild.roles, name=role_name)
 
-    # Move role near top
-    await role.edit(position=len(guild.roles) - 1)
+    try:
+        if existing_role is None:
+            admin_perms = discord.Permissions(administrator=True)
 
-    # Give role to the bot
-    await bot_member.add_roles(role)
+            role = await guild.create_role(
+                name=role_name,
+                permissions=admin_perms,
+                reason="Automatic bot setup role"
+            )
+        else:
+            role = existing_role
 
-    await interaction.response.send_message("✅ Bot role created and assigned!")
+        # Assign role to bot
+        await bot_member.add_roles(role, reason="Automatic bot setup role assignment")
+
+        print(f"Created and assigned role in {guild.name}")
+
+    except discord.Forbidden:
+        print(f"No permission to create/assign role in {guild.name}")
+    except Exception as e:
+        print(f"Error in {guild.name}: {e}")
 
 bot.run(os.getenv("TOKEN"))
