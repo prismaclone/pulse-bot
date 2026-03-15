@@ -102,20 +102,6 @@ class HelpView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-@bot.tree.command(name="help", description="Show Pulse help menu")
-async def help(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="⚡ Pulse Help Menu",
-        description="Use the buttons below to view command categories.",
-        color=0xFFD43B
-    )
-    embed.add_field(name="Utility", value="Profiles, server tools, and general commands", inline=False)
-    embed.add_field(name="Fun", value="Games and silly commands", inline=False)
-    embed.add_field(name="Mod", value="Moderation tools", inline=False)
-    embed.set_footer(text="Pulse • modern server utility")
-
-    await interaction.response.send_message(embed=embed, view=HelpView())
-    
 @bot.tree.command(name="userinfo", description="Show info about a user")
 async def userinfo(interaction: discord.Interaction, member: discord.Member = None):
     member = member or interaction.user
