@@ -13,7 +13,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
 
-
 @bot.event
 async def on_ready():
     bot.add_view(HelpView())
@@ -35,8 +34,7 @@ async def on_ready():
     )
 
     print(f"Pulse is online as {bot.user}")
-
-
+    
 @bot.tree.command(name="ping", description="Check if Pulse is alive")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
