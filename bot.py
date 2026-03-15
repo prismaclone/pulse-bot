@@ -628,10 +628,11 @@ SUPPORT_ROLE_NAME = "Support Staff"
 TICKET_CATEGORY_NAME = "tickets"
 
 intents = discord.Intents.default()
-intents.members = True
 intents.guilds = True
+intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 
 # ---------- TICKET CONTROL VIEW ----------
 class TicketControlView(discord.ui.View):
@@ -645,54 +646,63 @@ class TicketControlView(discord.ui.View):
         custom_id="claim_ticket"
     )
     async def claim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
 
-        support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
-
-        if support_role not in interaction.user.roles:
-            await interaction.response.send_message(
-                "❌ Only support staff can claim tickets.",
-                ephemeral=True
-            )
-            return
-
-        topic = interaction.channel.topic or ""
-
-        if topic.startswith("claimed_by:"):
-            claimed_id = topic.split(":")[1]
-
-            if claimed_id == str(interaction.user.id):
+            if support_role is None or support_role not in interaction.user.roles:
                 await interaction.response.send_message(
-                    "⚠️ You already claimed this ticket.",
+                    "❌ Only support staff can claim tickets.",
                     ephemeral=True
                 )
                 return
 
-            member = interaction.guild.get_member(int(claimed_id))
-            name = member.mention if member else "someone"
+            if not interaction.message.embeds:
+                await interaction.response.send_message(
+                    "❌ No ticket embed found.",
+                    ephemeral=True
+                )
+                return
 
-            await interaction.response.send_message(
-                f"⚠️ This ticket is already claimed by {name}.",
-                ephemeral=True
+            topic = interaction.channel.topic or ""
+
+            if topic.startswith("claimed_by:"):
+                claimed_id = topic.split(":", 1)[1]
+
+                if claimed_id == str(interaction.user.id):
+                    await interaction.response.send_message(
+                        "⚠️ You already claimed this ticket.",
+                        ephemeral=True
+                    )
+                    return
+
+                member = interaction.guild.get_member(int(claimed_id))
+                name = member.mention if member else "someone"
+
+                await interaction.response.send_message(
+                    f"⚠️ This ticket is already claimed by {name}.",
+                    ephemeral=True
+                )
+                return
+
+            await interaction.channel.edit(topic=f"claimed_by:{interaction.user.id}")
+
+            embed = interaction.message.embeds[0]
+            embed.set_field_at(
+                1,
+                name="Ticket Status",
+                value=f"**Claimed by:** {interaction.user.mention}",
+                inline=False
             )
-            return
 
-        await interaction.channel.edit(topic=f"claimed_by:{interaction.user.id}")
+            await interaction.message.edit(embed=embed, view=TicketControlView())
+            await interaction.response.send_message("✅ You claimed this ticket.", ephemeral=True)
 
-        embed = interaction.message.embeds[0]
-
-        embed.set_field_at(
-            1,
-            name="Ticket Status",
-            value=f"**Claimed by:** {interaction.user.mention}",
-            inline=False
-        )
-
-        await interaction.message.edit(embed=embed, view=self)
-
-        await interaction.response.send_message(
-            "✅ You claimed this ticket.",
-            ephemeral=True
-        )
+        except Exception as e:
+            print(f"claim_ticket error: {e}")
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error: `{e}`", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error: `{e}`", ephemeral=True)
 
     @discord.ui.button(
         label="Unclaim Ticket",
@@ -701,54 +711,63 @@ class TicketControlView(discord.ui.View):
         custom_id="unclaim_ticket"
     )
     async def unclaim_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
 
-        support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
+            if support_role is None or support_role not in interaction.user.roles:
+                await interaction.response.send_message(
+                    "❌ Only support staff can unclaim tickets.",
+                    ephemeral=True
+                )
+                return
 
-        if support_role not in interaction.user.roles:
-            await interaction.response.send_message(
-                "❌ Only support staff can unclaim tickets.",
-                ephemeral=True
+            if not interaction.message.embeds:
+                await interaction.response.send_message(
+                    "❌ No ticket embed found.",
+                    ephemeral=True
+                )
+                return
+
+            topic = interaction.channel.topic or ""
+
+            if not topic.startswith("claimed_by:"):
+                await interaction.response.send_message(
+                    "⚠️ This ticket is not currently claimed.",
+                    ephemeral=True
+                )
+                return
+
+            claimed_id = topic.split(":", 1)[1]
+
+            if claimed_id != str(interaction.user.id):
+                member = interaction.guild.get_member(int(claimed_id))
+                name = member.mention if member else "another staff member"
+
+                await interaction.response.send_message(
+                    f"⚠️ This ticket is claimed by {name}, not you.",
+                    ephemeral=True
+                )
+                return
+
+            await interaction.channel.edit(topic="unclaimed")
+
+            embed = interaction.message.embeds[0]
+            embed.set_field_at(
+                1,
+                name="Ticket Status",
+                value="**Claimed by:** Nobody",
+                inline=False
             )
-            return
 
-        topic = interaction.channel.topic or ""
+            await interaction.message.edit(embed=embed, view=TicketControlView())
+            await interaction.response.send_message("✅ You unclaimed this ticket.", ephemeral=True)
 
-        if not topic.startswith("claimed_by:"):
-            await interaction.response.send_message(
-                "⚠️ This ticket is not currently claimed.",
-                ephemeral=True
-            )
-            return
-
-        claimed_id = topic.split(":")[1]
-
-        if claimed_id != str(interaction.user.id):
-            member = interaction.guild.get_member(int(claimed_id))
-            name = member.mention if member else "another staff member"
-
-            await interaction.response.send_message(
-                f"⚠️ This ticket is claimed by {name}, not you.",
-                ephemeral=True
-            )
-            return
-
-        await interaction.channel.edit(topic="unclaimed")
-
-        embed = interaction.message.embeds[0]
-
-        embed.set_field_at(
-            1,
-            name="Ticket Status",
-            value="**Claimed by:** Nobody",
-            inline=False
-        )
-
-        await interaction.message.edit(embed=embed, view=self)
-
-        await interaction.response.send_message(
-            "✅ You unclaimed this ticket.",
-            ephemeral=True
-        )
+        except Exception as e:
+            print(f"unclaim_ticket error: {e}")
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error: `{e}`", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error: `{e}`", ephemeral=True)
 
     @discord.ui.button(
         label="Close Ticket",
@@ -757,22 +776,25 @@ class TicketControlView(discord.ui.View):
         custom_id="close_ticket"
     )
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
 
-        support_role = discord.utils.get(interaction.guild.roles, name=SUPPORT_ROLE_NAME)
+            if support_role is None or support_role not in interaction.user.roles:
+                await interaction.response.send_message(
+                    "❌ Only support staff can close tickets.",
+                    ephemeral=True
+                )
+                return
 
-        if support_role not in interaction.user.roles:
-            await interaction.response.send_message(
-                "❌ Only support staff can close tickets.",
-                ephemeral=True
-            )
-            return
+            await interaction.response.send_message("🔒 Closing this ticket...", ephemeral=True)
+            await interaction.channel.delete()
 
-        await interaction.response.send_message(
-            "🔒 Closing this ticket...",
-            ephemeral=True
-        )
-
-        await interaction.channel.delete()
+        except Exception as e:
+            print(f"close_ticket error: {e}")
+            if interaction.response.is_done():
+                await interaction.followup.send(f"❌ Error: `{e}`", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"❌ Error: `{e}`", ephemeral=True)
 
 
 # ---------- TICKET PANEL VIEW ----------
@@ -787,98 +809,111 @@ class TicketPanelView(discord.ui.View):
         custom_id="open_ticket"
     )
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        try:
+            await interaction.response.defer(ephemeral=True)
 
-        guild = interaction.guild
-        user = interaction.user
+            guild = interaction.guild
+            user = interaction.user
 
-        support_role = discord.utils.get(guild.roles, name=SUPPORT_ROLE_NAME)
-        category = discord.utils.get(guild.categories, name=TICKET_CATEGORY_NAME)
+            support_role = discord.utils.get(guild.roles, name=SUPPORT_ROLE_NAME)
+            category = discord.utils.get(guild.categories, name=TICKET_CATEGORY_NAME)
 
-        existing = discord.utils.get(guild.text_channels, name=f"ticket-{user.name.lower()}")
+            existing = discord.utils.get(guild.text_channels, name=f"ticket-{user.name.lower()}")
 
-        if existing:
-            await interaction.response.send_message(
-                f"⚠️ You already have a ticket open: {existing.mention}",
+            if existing:
+                await interaction.followup.send(
+                    f"⚠️ You already have a ticket open: {existing.mention}",
+                    ephemeral=True
+                )
+                return
+
+            bot_member = guild.me or guild.get_member(bot.user.id)
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                user: discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                ),
+                bot_member: discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    manage_channels=True,
+                    manage_messages=True
+                )
+            }
+
+            if support_role:
+                overwrites[support_role] = discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True
+                )
+
+            channel = await guild.create_text_channel(
+                name=f"ticket-{user.name.lower()}",
+                category=category,
+                overwrites=overwrites,
+                topic="unclaimed"
+            )
+
+            ticket_embed = discord.Embed(
+                title="🎟️ Ticket Opened",
+                description=(
+                    f"{user.mention}, thanks for opening a ticket.\n\n"
+                    "Please explain your issue clearly so staff can help you faster."
+                ),
+                color=discord.Color.blurple()
+            )
+
+            ticket_embed.add_field(
+                name="Helpful details",
+                value=(
+                    "• What you need help with\n"
+                    "• When the issue happened\n"
+                    "• Screenshots or evidence\n"
+                    "• Extra context if needed"
+                ),
+                inline=False
+            )
+
+            ticket_embed.add_field(
+                name="Ticket Status",
+                value="**Claimed by:** Nobody",
+                inline=False
+            )
+
+            ticket_embed.add_field(
+                name="Reminder",
+                value="Please be patient and avoid ping spamming.",
+                inline=False
+            )
+
+            ticket_embed.set_footer(text="Pulse • Support system ⚡")
+
+            await channel.send(
+                content=f"{user.mention} {support_role.mention if support_role else ''}",
+                embed=ticket_embed,
+                view=TicketControlView()
+            )
+
+            await interaction.followup.send(
+                f"✅ Ticket created: {channel.mention}",
                 ephemeral=True
             )
-            return
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True
-            ),
-            guild.me: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                manage_channels=True,
-                manage_messages=True
-            )
-        }
-
-        if support_role:
-            overwrites[support_role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True
-            )
-
-        channel = await guild.create_text_channel(
-            name=f"ticket-{user.name.lower()}",
-            category=category,
-            overwrites=overwrites,
-            topic="unclaimed"
-        )
-
-        ticket_embed = discord.Embed(
-            title="🎟️ Ticket Opened",
-            description=f"{user.mention}, thanks for opening a ticket.\n\nPlease explain your issue clearly so staff can help you faster.",
-            color=discord.Color.blurple()
-        )
-
-        ticket_embed.add_field(
-            name="Helpful details",
-            value=(
-                "• What you need help with\n"
-                "• When the issue happened\n"
-                "• Screenshots or evidence\n"
-                "• Extra context if needed"
-            ),
-            inline=False
-        )
-
-        ticket_embed.add_field(
-            name="Ticket Status",
-            value="**Claimed by:** Nobody",
-            inline=False
-        )
-
-        ticket_embed.add_field(
-            name="Reminder",
-            value="Please be patient and avoid ping spamming.",
-            inline=False
-        )
-
-        ticket_embed.set_footer(text="Pulse • Support system ⚡")
-
-        await channel.send(
-            content=f"{user.mention} {support_role.mention if support_role else ''}",
-            embed=ticket_embed,
-            view=TicketControlView()
-        )
-
-        await interaction.response.send_message(
-            f"✅ Ticket created: {channel.mention}",
-            ephemeral=True
-        )
+        except Exception as e:
+            print(f"open_ticket error: {e}")
+            try:
+                await interaction.followup.send(f"❌ Error: `{e}`", ephemeral=True)
+            except:
+                pass
 
 
 # ---------- READY EVENT ----------
 @bot.event
 async def on_ready():
-
     bot.add_view(TicketPanelView())
     bot.add_view(TicketControlView())
 
@@ -894,7 +929,6 @@ async def on_ready():
 # ---------- PANEL COMMAND ----------
 @bot.tree.command(name="ticketpanel", description="Send the ticket panel")
 async def ticketpanel(interaction: discord.Interaction):
-
     embed = discord.Embed(
         title="🎟️ Support Tickets",
         description="Press the button below to open a private support ticket.",
@@ -914,10 +948,23 @@ async def ticketpanel(interaction: discord.Interaction):
 
     embed.set_footer(text="Pulse • Managing everything here ⚡")
 
-    await interaction.response.send_message(
-        embed=embed,
-        view=TicketPanelView()
-    )
+    await interaction.response.send_message(embed=embed, view=TicketPanelView())
+
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    print(f"slash command error: {error}")
+
+    if interaction.response.is_done():
+        await interaction.followup.send(
+            f"❌ Command error: `{error}`",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"❌ Command error: `{error}`",
+            ephemeral=True
+        )
         
 print("starting pulse...")
 bot.run(os.getenv("TOKEN"))
