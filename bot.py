@@ -17,26 +17,37 @@ start_time = datetime.now(timezone.utc)
 async def on_ready():
     print("on_ready fired")
 
-    bot.add_view(HelpView())
-    bot.add_view(TicketPanelView())
-    bot.add_view(CloseTicketView())
+    try:
+        print("adding HelpView")
+        bot.add_view(HelpView())
+        print("adding TicketPanelView")
+        bot.add_view(TicketPanelView())
+        print("adding CloseTicketView")
+        bot.add_view(CloseTicketView())
+        print("views added")
+    except Exception as e:
+        print(f"view error: {e}")
 
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
-        print(f"Sync error: {e}")
+        print(f"sync error: {e}")
 
-    await bot.change_presence(
-        status=discord.Status.online,
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="Managing everything here ⚡"
+    try:
+        await bot.change_presence(
+            status=discord.Status.online,
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name="Managing everything here ⚡"
+            )
         )
-    )
+        print("presence set")
+    except Exception as e:
+        print(f"presence error: {e}")
 
     print(f"Pulse is online as {bot.user}")
-
+    
 GUILD_ID = 1414144666651197473
 MY_GUILD = discord.Object(id=GUILD_ID)
 
@@ -774,4 +785,5 @@ async def ticketpanel(interaction: discord.Interaction):
 async def testticket(interaction: discord.Interaction):
     await interaction.response.send_message("test works")
 
+print("starting pulse...")
 bot.run(os.getenv("TOKEN"))
