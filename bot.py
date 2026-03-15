@@ -13,6 +13,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
 
+
 @bot.event
 async def on_ready():
     bot.add_view(HelpView())
@@ -34,26 +35,23 @@ async def on_ready():
     )
 
     print(f"Pulse is online as {bot.user}")
-    
-  synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Sync error: {e}")
+
 
 @bot.tree.command(name="ping", description="Check if Pulse is alive")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
     await interaction.response.send_message(f"⚡ Pulse latency: {latency}ms")
 
+
 @bot.tree.command(name="hello", description="Say hello")
 async def hello(interaction: discord.Interaction):
     await interaction.response.send_message(f"Hey {interaction.user.mention} ⚡")
+
+
 @bot.tree.command(name="avatar", description="Get a user's avatar")
 async def avatar(interaction: discord.Interaction, member: discord.Member = None):
-    await interaction.response.defer()
-
     member = member or interaction.user
-    await interaction.followup.send(member.display_avatar.url)
+    await interaction.response.send_message(member.display_avatar.url)
 
     @discord.ui.button(label="Utility", style=discord.ButtonStyle.primary, emoji="⚡")
     async def utility_button(self, interaction: discord.Interaction, button: discord.ui.Button):
