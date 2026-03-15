@@ -853,5 +853,33 @@ async def ticketpanel(interaction: discord.Interaction):
 if TOKEN is None:
     raise ValueError("TOKEN environment variable is missing.")
 
+@bot.tree.command(name="unlockall", description="Unlock all text channels in the server")
+async def unlockall(interaction: discord.Interaction):
+
+    if not interaction.user.guild_permissions.manage_channels:
+        await interaction.response.send_message(
+            "❌ You need Manage Channels permission to use this.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    guild = interaction.guild
+    default_role = guild.default_role
+    count = 0
+
+    for channel in guild.text_channels:
+        try:
+            await channel.set_permissions(default_role, send_messages=None)
+            count += 1
+        except Exception as e:
+            print(f"Failed to unlock {channel.name}: {e}")
+
+    await interaction.followup.send(
+        f"🔓 Unlocked **{count}** channels.",
+        ephemeral=True
+    )
+    
 print("booting pulse...")
 bot.run(TOKEN)
