@@ -14,7 +14,14 @@ start_time = datetime.now(timezone.utc)
 
 @bot.event
 async def on_ready():
-    print(f"Pulse is online as {bot.user}")
+    bot.add_view(TicketPanelView())
+    bot.add_view(CloseTicketView())
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
 
     await bot.change_presence(
         status=discord.Status.online,
@@ -23,6 +30,8 @@ async def on_ready():
             name="Managing everything here ⚡"
         )
     )
+
+    print(f"Pulse is online as {bot.user}")
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
@@ -638,5 +647,145 @@ async def on_ready():
 
     print(f"Pulse is online as {bot.user}")
     await interaction.response.send_message(embed=embed)
+
+class TicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+import discord
+from discord.ext import commands
+
+# ---------- CLOSE TICKET VIEW ----------
+class CloseTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.red)
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔒 Closing this ticket...", ephemeral=True)
+        await interaction.channel.delete()
+
+
+# ---------- OPEN TICKET VIEW ----------
+class TicketPanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Open Ticket", emoji="🎟️", style=discord.ButtonStyle.green)
+    async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        user = interaction.user
+
+        # Optional: choose a staff role by name
+        staff_role = discord.utils.get(guild.roles, name="Staff")
+
+        # Create/find ticket category
+        category = discord.utils.get(guild.categories, name="Tickets")
+        if category is None:
+            category = await guild.create_category("Tickets")
+
+        # Prevent duplicate tickets
+        existing_channel = discord.utils.get(guild.text_channels, name=f"ticket-{user.name.lower()}")
+        if existing_channel:
+            await interaction.response.send_message(
+                f"⚠️ You already have an open ticket: {existing_channel.mention}",
+                ephemeral=True
+            )
+            return
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True)
+        }
+
+        if staff_role:
+            overwrites[staff_role] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                manage_channels=True
+            )
+
+        channel = await guild.create_text_channel(
+            name=f"ticket-{user.name.lower()}",
+            category=category,
+            overwrites=overwrites
+        )
+
+        ticket_embed = discord.Embed(
+            title="🎟️ Ticket Opened",
+            description=(
+                f"Hey {user.mention}, thanks for opening a ticket.\n\n"
+                "**Please explain your issue clearly** so staff can help you faster."
+            ),
+            color=discord.Color.blurple()
+        )
+
+        ticket_embed.add_field(
+            name="Helpful details to include",
+            value=(
+                "• What you need help with\n"
+                "• When the issue happened\n"
+                "• Screenshots or evidence if needed\n"
+                "• Any extra context staff should know"
+            ),
+            inline=False
+        )
+
+        ticket_embed.add_field(
+            name="Reminder",
+            value="Please be patient and avoid ping spamming. A staff member will respond when available.",
+            inline=False
+        )
+
+        ticket_embed.set_footer(text="Pulse • Support system ⚡")
+
+        if staff_role:
+            await channel.send(content=f"{user.mention} {staff_role.mention}", embed=ticket_embed, view=CloseTicketView())
+        else:
+            await channel.send(content=f"{user.mention}", embed=ticket_embed, view=CloseTicketView())
+
+        await interaction.response.send_message(
+            f"✅ Your ticket has been created: {channel.mention}",
+            ephemeral=True
+        )
+
+
+# ---------- TICKET PANEL COMMAND ----------
+@bot.tree.command(name="ticketpanel", description="Send the support ticket panel")
+async def ticketpanel(interaction: discord.Interaction):
+    embed = discord.Embed(
+        title="🎟️ Support Tickets",
+        description=(
+            "Need help from staff?\n\n"
+            "Press the button below to open a private support ticket."
+        ),
+        color=discord.Color.blurple()
+    )
+
+    embed.add_field(
+        name="When to open a ticket",
+        value=(
+            "• Reporting a problem or issue\n"
+            "• Asking for staff help\n"
+            "• Reporting a user privately\n"
+            "• Questions that should not be discussed publicly"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Before opening one",
+        value=(
+            "• Make sure your question is not already answered\n"
+            "• Use one ticket per issue\n"
+            "• Be clear and respectful"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Pulse • Managing everything here ⚡")
+
+    await interaction.response.send_message(embed=embed, view=TicketPanelView())
 
 bot.run(os.getenv("TOKEN"))
