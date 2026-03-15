@@ -372,4 +372,27 @@ async def suggest(interaction: discord.Interaction, suggestion: str):
                 ephemeral=True
             )
 
+@bot.tree.command(name="support", description="Join the official support server")
+async def support(interaction: discord.Interaction):
+
+    embed = discord.Embed(
+        title="🔧 Bot Support",
+        description="Need help with commands, bugs, or setup?",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(
+        name="📌 Support Server",
+        value="[Join Here](https://discord.gg/Q9tjKS6rjK)",
+        inline=False
+    )
+
+    embed.add_field(
+        name="💬 What you can do there",
+        value="• Get help\n• Report bugs\n• Suggest features\n• Chat with the community",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
+
 bot.run(os.getenv("TOKEN"))
