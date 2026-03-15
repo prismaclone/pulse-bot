@@ -785,5 +785,20 @@ async def ticketpanel(interaction: discord.Interaction):
 async def testticket(interaction: discord.Interaction):
     await interaction.response.send_message("test works")
 
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    print(f"slash command error: {error}")
+
+    if interaction.response.is_done():
+        await interaction.followup.send(
+            f"❌ Command error: `{error}`",
+            ephemeral=True
+        )
+    else:
+        await interaction.response.send_message(
+            f"❌ Command error: `{error}`",
+            ephemeral=True
+        )
+        
 print("starting pulse...")
 bot.run(os.getenv("TOKEN"))
