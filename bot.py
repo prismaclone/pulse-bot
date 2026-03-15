@@ -112,15 +112,4 @@ async def poll(interaction: discord.Interaction, question: str):
     await msg.add_reaction("✅")
     await msg.add_reaction("❌")
 
-@bot.tree.command(name="hello", description="Say hello")
-async def hello(interaction: discord.Interaction):
-    try:
-        await interaction.response.send_message(f"Hey {interaction.user.mention} ⚡")
-    except Exception as e:
-        print(f"hello error: {e}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message("Something broke 😭", ephemeral=True)
-        else:
-            await interaction.followup.send("Something broke 😭", ephemeral=True)
-
 bot.run(os.getenv("TOKEN"))
