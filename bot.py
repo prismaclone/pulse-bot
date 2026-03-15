@@ -63,6 +63,16 @@ class HelpView(discord.ui.View):
         embed.add_field(name="/serverinfo", value="Show info about the server", inline=False)
         embed.add_field(name="/say", value="Make Pulse send a message", inline=False)
         embed.add_field(name="/poll", value="Create a yes/no poll", inline=False)
+        embed.add_field(name="/uptime", value="Show how long Pulse has been online", inline=False)
+        embed.add_field(name="/botinfo", value="Show info about Pulse", inline=False)
+        embed.add_field(name="/8ball", value="Ask the magic 8-ball a question", inline=False)
+        embed.add_field(name="/embed", value="Send a simple embed", inline=False)
+        embed.add_field(name="/remind", value="Set a reminder", inline=False)
+        embed.add_field(name="/suggest", value="Post a suggestion", inline=False)
+        embed.add_field(name="/coinflip", value="Flip a coin", inline=False)
+        embed.add_field(name="/choose", value="Choose between options", inline=False)
+        embed.add_field(name="/rate", value="Rate something out of 10", inline=False)
+
 
         await interaction.response.edit_message(embed=embed, view=self)
 
