@@ -677,7 +677,7 @@ class TicketPanelView(discord.ui.View):
         user = interaction.user
 
         # Optional: choose a staff role by name
-        staff_role = discord.utils.get(guild.roles, name="Staff")
+        staff_role = discord.utils.get(guild.roles, name="Support Staff")
 
         # Create/find ticket category
         category = discord.utils.get(guild.categories, name="Tickets")
