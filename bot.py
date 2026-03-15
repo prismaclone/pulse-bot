@@ -36,7 +36,7 @@ async def hello(interaction: discord.Interaction):
 
 @bot.tree.command(name="avatar", description="Get a user's avatar")
 async def avatar(interaction: discord.Interaction, member: discord.Member = None):
-       member = member or interaction.user
+    member = member or interaction.user
     await interaction.response.send_message(member.display_avatar.url)
 
 bot.run(os.getenv("TOKEN"))
