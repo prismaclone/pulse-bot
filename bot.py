@@ -12,25 +12,6 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 start_time = datetime.now(timezone.utc)
 
-@bot.event
-async def on_ready():
-    bot.add_view(TicketPanelView())
-    bot.add_view(CloseTicketView())
-
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Sync error: {e}")
-
-    await bot.change_presence(
-        status=discord.Status.online,
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="Managing everything here ⚡"
-        )
-    )
-
     print(f"Pulse is online as {bot.user}")
     try:
         synced = await bot.tree.sync()
@@ -628,22 +609,6 @@ async def serverstats(interaction: discord.Interaction):
             ephemeral=True
         )
         print(f"/serverstats error: {e}")
-
-@bot.event
-async def on_ready():
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Sync error: {e}")
-
-    await bot.change_presence(
-        status=discord.Status.online,
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="Managing everything here ⚡"
-        )
-    )
 
     print(f"Pulse is online as {bot.user}")
     await interaction.response.send_message(embed=embed)
