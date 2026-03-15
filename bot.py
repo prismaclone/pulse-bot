@@ -765,4 +765,8 @@ async def ticketpanel(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=TicketPanelView())
 
+@bot.tree.command(name="testticket", description="Test ticket command")
+async def testticket(interaction: discord.Interaction):
+    await interaction.response.send_message("test works")
+
 bot.run(os.getenv("TOKEN"))
