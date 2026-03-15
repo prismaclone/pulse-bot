@@ -328,28 +328,48 @@ async def rate(interaction: discord.Interaction, thing: str):
 
     await interaction.response.send_message(embed=embed)
 SUGGESTION_CHANNEL_ID = 123456789012345678
+  
+SUGGESTION_CHANNEL_ID = 123456789012345678  # replace with your real channel ID
 
 @bot.tree.command(name="suggest", description="Send a suggestion")
 async def suggest(interaction: discord.Interaction, suggestion: str):
+    try:
+        channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
 
-    channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
+        if channel is None:
+            await interaction.response.send_message(
+                "I couldn't find the suggestion channel.",
+                ephemeral=True
+            )
+            return
 
-    embed = discord.Embed(
-        title="💡 New Suggestion",
-        description=suggestion,
-        color=0xFFD43B
-    )
+        embed = discord.Embed(
+            title="💡 New Suggestion",
+            description=suggestion,
+            color=0xFFD43B
+        )
+        embed.set_footer(text=f"Suggested by {interaction.user}")
 
-    embed.set_footer(text=f"Suggested by {interaction.user}")
+        message = await channel.send(embed=embed)
+        await message.add_reaction("⬆️")
+        await message.add_reaction("⬇️")
 
-    message = await channel.send(embed=embed)
-    await message.add_reaction("⬆️")
-    await message.add_reaction("⬇️")
+        await interaction.response.send_message(
+            "Your suggestion has been submitted!",
+            ephemeral=True
+        )
 
-    await interaction.response.send_message(
-        "Your suggestion has been submitted!",
-        ephemeral=True
-    )
-  
+    except Exception as e:
+        print(f"suggest error: {e}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                f"Suggest error: {e}",
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                f"Suggest error: {e}",
+                ephemeral=True
+            )
 
 bot.run(os.getenv("TOKEN"))
