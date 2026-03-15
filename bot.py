@@ -1,11 +1,3 @@
-await bot.change_presence(
-    status=discord.Status.online,
-    activity=discord.Activity(
-        type=discord.ActivityType.watching,
-        name="the server pulse ⚡"
-    )
-)
-
 import discord
 from discord.ext import commands
 import os
@@ -17,7 +9,16 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="the server pulse ⚡"
+        )
+    )
+
     print(f"Pulse is online as {bot.user}")
+
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
@@ -35,8 +36,7 @@ async def hello(interaction: discord.Interaction):
 
 @bot.tree.command(name="avatar", description="Get a user's avatar")
 async def avatar(interaction: discord.Interaction, member: discord.Member = None):
-    member = member or interaction.user
+       member = member or interaction.user
     await interaction.response.send_message(member.display_avatar.url)
 
 bot.run(os.getenv("TOKEN"))
-
