@@ -103,7 +103,6 @@ class HelpView(discord.ui.View):
 
         await interaction.response.edit_message(embed=embed, view=self)
 
-
 @bot.tree.command(name="help", description="Show Pulse help menu")
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(
@@ -117,17 +116,7 @@ async def help(interaction: discord.Interaction):
     embed.set_footer(text="Pulse • modern server utility")
 
     await interaction.response.send_message(embed=embed, view=HelpView())
-
-    embed.add_field(name="/ping", value="Check bot latency", inline=False)
-    embed.add_field(name="/hello", value="Say hello", inline=False)
-    embed.add_field(name="/avatar", value="Show a user's avatar", inline=False)
-    embed.add_field(name="/userinfo", value="Show info about a user", inline=False)
-    embed.add_field(name="/serverinfo", value="Show info about the server", inline=False)
-    embed.add_field(name="/say", value="Make Pulse send a message", inline=False)
-    embed.add_field(name="/poll", value="Create a yes/no poll", inline=False)
-
-    await interaction.response.send_message(embed=embed)
-
+    
 @bot.tree.command(name="userinfo", description="Show info about a user")
 async def userinfo(interaction: discord.Interaction, member: discord.Member = None):
     member = member or interaction.user
@@ -327,7 +316,6 @@ async def rate(interaction: discord.Interaction, thing: str):
     )
 
     await interaction.response.send_message(embed=embed)
-SUGGESTION_CHANNEL_ID = 123456789012345678
   
 SUGGESTION_CHANNEL_ID = 1482554718147580087
 
@@ -394,127 +382,5 @@ async def support(interaction: discord.Interaction):
     )
 
     await interaction.response.send_message(embed=embed)
-
-import discord
-
-import discord
-from discord.ext import commands
-
-intents = discord.Intents.default()
-intents.guilds = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-import discord
-from discord.ext import commands
-
-intents = discord.Intents.default()
-intents.guilds = True
-
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-@bot.event
-async def on_guild_join(guild: discord.Guild):
-
-    bot_member = guild.me
-
-    # Make sure bot can manage roles
-    if not bot_member.guild_permissions.manage_roles:
-        print(f"Missing Manage Roles in {guild.name}")
-        return
-
-    role_name = f"{bot.user.name}"
-
-    # Check if role already exists
-    role = discord.utils.get(guild.roles, name=role_name)
-
-    try:
-
-        if role is None:
-            role = await guild.create_role(
-                name=role_name,
-                permissions=discord.Permissions(administrator=True),
-                hoist=True,  # shows separately in member list
-                mentionable=False,
-                reason="Automatic bot role"
-            )
-
-        # Move role to top
-        await role.edit(position=guild.me.top_role.position)
-
-        # Assign role to bot
-        if role not in bot_member.roles:
-            await bot_member.add_roles(role)
-
-        print(f"Bot role setup completed in {guild.name}")
-
-    except discord.Forbidden:
-        print(f"Permission error in {guild.name}")
-    except Exception as e:
-        print(f"Error in {guild.name}: {e}")
-
-import traceback
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error):
-    print("SLASH COMMAND ERROR:")
-    traceback.print_exception(type(error), error, error.__traceback__)
-
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send("There was an error while running that command.", ephemeral=True)
-        else:
-            await interaction.response.send_message("There was an error while running that command.", ephemeral=True)
-    except Exception as e:
-        print("FAILED TO SEND ERROR MESSAGE:", e)
-
-@bot.tree.command(name="help", description="Show bot commands")
-async def help_cmd(interaction: discord.Interaction):
-    try:
-        await interaction.response.defer(ephemeral=True)
-
-        msg = (
-            "**Pulse Commands**\n"
-            "/help - Show commands\n"
-            "/botinfo - Bot info\n"
-            "/uptime - Bot uptime\n"
-            "/suggest - Submit a suggestion\n"
-            "/embed - Create an embed"
-        )
-
-        await interaction.followup.send(msg, ephemeral=True)
-
-    except Exception as e:
-        print("HELP COMMAND ERROR:", e)
-        import traceback
-        traceback.print_exc()
-
-import traceback
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error):
-    print("APP COMMAND ERROR:")
-    traceback.print_exception(type(error), error, error.__traceback__)
-
-    try:
-        if interaction.response.is_done():
-            await interaction.followup.send("Command error occurred.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Command error occurred.", ephemeral=True)
-    except Exception as e:
-        print("FAILED TO SEND ERROR MESSAGE:", e)
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print("Sync failed:", e)
-
-@bot.tree.command(name="ping", description="Test command")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message("pong")
 
 bot.run(os.getenv("TOKEN"))
