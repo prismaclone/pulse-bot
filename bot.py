@@ -788,4 +788,24 @@ async def ticketpanel(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed, view=TicketPanelView())
 
+@bot.event
+async def on_ready():
+    bot.add_view(TicketPanelView())
+    bot.add_view(CloseTicketView())
+
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} command(s)")
+    except Exception as e:
+        print(f"Sync error: {e}")
+
+    await bot.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="Managing everything here ⚡"
+        )
+    )
+
+    print(f"Pulse is online as {bot.user}")
 bot.run(os.getenv("TOKEN"))
