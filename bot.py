@@ -636,12 +636,15 @@ import discord
 from discord.ext import commands
 
 # ---------- CLOSE TICKET VIEW ----------
-@discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.red)
+class CloseTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Close Ticket", emoji="🔒", style=discord.ButtonStyle.red)
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("🔒 Closing this ticket...", ephemeral=True)
         await interaction.channel.delete()
-
-
+        
 # ---------- OPEN TICKET VIEW ----------
 class TicketPanelView(discord.ui.View):
     def __init__(self):
