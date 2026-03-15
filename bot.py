@@ -587,7 +587,7 @@ async def serverstats(interaction: discord.Interaction):
 
     embed.set_footer(text="Pulse • Managing everything here ⚡")
 
-    @bot.event
+@bot.event
 async def on_ready():
     try:
         synced = await bot.tree.sync()
