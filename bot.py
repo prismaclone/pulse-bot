@@ -526,9 +526,10 @@ from datetime import datetime, timezone
 
 from datetime import datetime, timezone
 
+from datetime import datetime, timezone
+
 @bot.tree.command(name="serverstats", description="View detailed server statistics")
 async def serverstats(interaction: discord.Interaction):
-
     guild = interaction.guild
 
     total_members = guild.member_count
@@ -547,6 +548,7 @@ async def serverstats(interaction: discord.Interaction):
 
     embed = discord.Embed(
         title=f"📊 {guild.name} Statistics",
+        description="A full look at this server’s current stats.",
         color=discord.Color.blurple()
     )
 
@@ -586,6 +588,5 @@ async def serverstats(interaction: discord.Interaction):
     embed.set_footer(text="Pulse • Managing everything here ⚡")
 
     await interaction.response.send_message(embed=embed)
-
 
 bot.run(os.getenv("TOKEN"))
