@@ -405,41 +405,51 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+import discord
+from discord.ext import commands
+
+intents = discord.Intents.default()
+intents.guilds = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
 @bot.event
 async def on_guild_join(guild: discord.Guild):
+
     bot_member = guild.me
 
-    if bot_member is None:
-        return
-
     # Make sure bot can manage roles
-    if not guild.me.guild_permissions.manage_roles:
+    if not bot_member.guild_permissions.manage_roles:
         print(f"Missing Manage Roles in {guild.name}")
         return
 
+    role_name = f"{bot.user.name}"
+
     # Check if role already exists
-    role_name = f"{bot.user.name} Role"
-    existing_role = discord.utils.get(guild.roles, name=role_name)
+    role = discord.utils.get(guild.roles, name=role_name)
 
     try:
-        if existing_role is None:
-            admin_perms = discord.Permissions(administrator=True)
 
+        if role is None:
             role = await guild.create_role(
                 name=role_name,
-                permissions=admin_perms,
-                reason="Automatic bot setup role"
+                permissions=discord.Permissions(administrator=True),
+                hoist=True,  # shows separately in member list
+                mentionable=False,
+                reason="Automatic bot role"
             )
-        else:
-            role = existing_role
+
+        # Move role to top
+        await role.edit(position=guild.me.top_role.position)
 
         # Assign role to bot
-        await bot_member.add_roles(role, reason="Automatic bot setup role assignment")
+        if role not in bot_member.roles:
+            await bot_member.add_roles(role)
 
-        print(f"Created and assigned role in {guild.name}")
+        print(f"Bot role setup completed in {guild.name}")
 
     except discord.Forbidden:
-        print(f"No permission to create/assign role in {guild.name}")
+        print(f"Permission error in {guild.name}")
     except Exception as e:
         print(f"Error in {guild.name}: {e}")
 
