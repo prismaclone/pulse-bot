@@ -453,4 +453,40 @@ async def on_guild_join(guild: discord.Guild):
     except Exception as e:
         print(f"Error in {guild.name}: {e}")
 
+import traceback
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error):
+    print("SLASH COMMAND ERROR:")
+    traceback.print_exception(type(error), error, error.__traceback__)
+
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send("There was an error while running that command.", ephemeral=True)
+        else:
+            await interaction.response.send_message("There was an error while running that command.", ephemeral=True)
+    except Exception as e:
+        print("FAILED TO SEND ERROR MESSAGE:", e)
+
+@bot.tree.command(name="help", description="Show bot commands")
+async def help_cmd(interaction: discord.Interaction):
+    try:
+        await interaction.response.defer(ephemeral=True)
+
+        msg = (
+            "**Pulse Commands**\n"
+            "/help - Show commands\n"
+            "/botinfo - Bot info\n"
+            "/uptime - Bot uptime\n"
+            "/suggest - Submit a suggestion\n"
+            "/embed - Create an embed"
+        )
+
+        await interaction.followup.send(msg, ephemeral=True)
+
+    except Exception as e:
+        print("HELP COMMAND ERROR:", e)
+        import traceback
+        traceback.print_exc()
+
 bot.run(os.getenv("TOKEN"))
