@@ -395,4 +395,36 @@ async def support(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+import discord
+
+@bot.tree.command(name="setupbotrole", description="Creates a role for the bot with admin permissions")
+async def setupbotrole(interaction: discord.Interaction):
+
+    guild = interaction.guild
+    bot_member = guild.me
+
+    # Check if role already exists
+    existing_role = discord.utils.get(guild.roles, name="Bot Role")
+
+    if existing_role:
+        await interaction.response.send_message("⚠️ Bot role already exists.", ephemeral=True)
+        return
+
+    # Create role with administrator permissions
+    permissions = discord.Permissions(administrator=True)
+
+    role = await guild.create_role(
+        name="Bot Role",
+        permissions=permissions,
+        reason="Bot setup role"
+    )
+
+    # Move role near top
+    await role.edit(position=len(guild.roles) - 1)
+
+    # Give role to the bot
+    await bot_member.add_roles(role)
+
+    await interaction.response.send_message("✅ Bot role created and assigned!")
+
 bot.run(os.getenv("TOKEN"))
