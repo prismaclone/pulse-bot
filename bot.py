@@ -1,11 +1,16 @@
 import discord
 from discord.ext import commands
 import os
+import random
+import asyncio
+from datetime import datetime, timezone
 
 intents = discord.Intents.default()
 intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+start_time = datetime.now(timezone.utc)
 
 @bot.event
 async def on_ready():
@@ -166,5 +171,178 @@ async def poll(interaction: discord.Interaction, question: str):
     msg = await interaction.original_response()
     await msg.add_reaction("✅")
     await msg.add_reaction("❌")
+
+@bot.tree.command(name="uptime", description="Show how long Pulse has been online")
+async def uptime(interaction: discord.Interaction):
+    now = datetime.now(timezone.utc)
+    delta = now - start_time
+
+    days = delta.days
+    hours, remainder = divmod(delta.seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    embed = discord.Embed(
+        title="⚡ Pulse Uptime",
+        color=0xFFD43B
+    )
+    embed.add_field(
+        name="Online For",
+        value=f"{days}d {hours}h {minutes}m {seconds}s",
+        inline=False
+    )
+    embed.add_field(
+        name="Latency",
+        value=f"{round(bot.latency * 1000)}ms",
+        inline=False
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="botinfo", description="Show info about Pulse")
+async def botinfo(interaction: discord.Interaction):
+    guild_count = len(bot.guilds)
+    command_count = len(bot.tree.get_commands())
+
+    embed = discord.Embed(
+        title="🤖 Pulse Bot Info",
+        description="Modern server utility bot.",
+        color=0xFFD43B
+    )
+    embed.add_field(name="Name", value=str(bot.user), inline=False)
+    embed.add_field(name="Servers", value=guild_count, inline=False)
+    embed.add_field(name="Commands", value=command_count, inline=False)
+    embed.add_field(name="Latency", value=f"{round(bot.latency * 1000)}ms", inline=False)
+
+    if bot.user and bot.user.display_avatar:
+        embed.set_thumbnail(url=bot.user.display_avatar.url)
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="8ball", description="Ask the magic 8-ball a question")
+async def eightball(interaction: discord.Interaction, question: str):
+    responses = [
+        "Yes.",
+        "No.",
+        "Definitely.",
+        "Absolutely not.",
+        "Maybe.",
+        "Probably.",
+        "Ask again later.",
+        "It is certain.",
+        "Very doubtful.",
+        "Without a doubt."
+    ]
+
+    embed = discord.Embed(
+        title="🎱 Magic 8-Ball",
+        color=0xFFD43B
+    )
+    embed.add_field(name="Question", value=question, inline=False)
+    embed.add_field(name="Answer", value=random.choice(responses), inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="embed", description="Send a simple embed")
+async def embed_cmd(interaction: discord.Interaction, title: str, description: str):
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=0xFFD43B
+    )
+    embed.set_footer(text=f"Requested by {interaction.user}")
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="remind", description="Set a reminder in minutes")
+async def remind(interaction: discord.Interaction, minutes: int, reminder: str):
+    if minutes <= 0:
+        await interaction.response.send_message("Minutes must be more than 0.", ephemeral=True)
+        return
+
+    await interaction.response.send_message(
+        f"⏰ Okay {interaction.user.mention}, I’ll remind you in {minutes} minute(s).",
+        ephemeral=True
+    )
+
+    await asyncio.sleep(minutes * 60)
+
+    try:
+        await interaction.followup.send(
+            f"⏰ Reminder for {interaction.user.mention}: {reminder}"
+        )
+    except Exception as e:
+        print(f"remind error: {e}")
+@bot.tree.command(name="suggest", description="Send a suggestion")
+async def suggest(interaction: discord.Interaction, suggestion: str):
+    embed = discord.Embed(
+        title="💡 New Suggestion",
+        description=suggestion,
+        color=0xFFD43B
+    )
+    embed.set_footer(text=f"Suggested by {interaction.user}")
+
+    await interaction.response.send_message(embed=embed)
+    message = await interaction.original_response()
+    await message.add_reaction("⬆️")
+    await message.add_reaction("⬇️")
+
+@bot.tree.command(name="suggest", description="Send a suggestion")
+async def suggest(interaction: discord.Interaction, suggestion: str):
+    embed = discord.Embed(
+        title="💡 New Suggestion",
+        description=suggestion,
+        color=0xFFD43B
+    )
+    embed.set_footer(text=f"Suggested by {interaction.user}")
+
+    await interaction.response.send_message(embed=embed)
+    message = await interaction.original_response()
+    await message.add_reaction("⬆️")
+    await message.add_reaction("⬇️")
+
+@bot.tree.command(name="coinflip", description="Flip a coin")
+async def coinflip(interaction: discord.Interaction):
+    result = random.choice(["Heads", "Tails"])
+
+    embed = discord.Embed(
+        title="🪙 Coin Flip",
+        description=f"The coin landed on **{result}**!",
+        color=0xFFD43B
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="choose", description="Choose between options separated by commas")
+async def choose(interaction: discord.Interaction, options: str):
+    split_options = [option.strip() for option in options.split(",") if option.strip()]
+
+    if len(split_options) < 2:
+        await interaction.response.send_message(
+            "Give me at least 2 options separated by commas.",
+            ephemeral=True
+        )
+        return
+
+    choice = random.choice(split_options)
+
+    embed = discord.Embed(
+        title="🤔 Choice Picker",
+        description=f"I choose: **{choice}**",
+        color=0xFFD43B
+    )
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="rate", description="Rate something out of 10")
+async def rate(interaction: discord.Interaction, thing: str):
+    score = random.randint(1, 10)
+
+    embed = discord.Embed(
+        title="⭐ Rating",
+        description=f"**{thing}** gets a **{score}/10**",
+        color=0xFFD43B
+    )
+
+    await interaction.response.send_message(embed=embed)
 
 bot.run(os.getenv("TOKEN"))
