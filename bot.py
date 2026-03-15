@@ -329,7 +329,7 @@ async def rate(interaction: discord.Interaction, thing: str):
     await interaction.response.send_message(embed=embed)
 SUGGESTION_CHANNEL_ID = 123456789012345678
   
-SUGGESTION_CHANNEL_ID = 123456789012345678  # replace with your real channel ID
+SUGGESTION_CHANNEL_ID = 1482554718147580087
 
 @bot.tree.command(name="suggest", description="Send a suggestion")
 async def suggest(interaction: discord.Interaction, suggestion: str):
