@@ -4,6 +4,7 @@ import os
 import random
 import asyncio
 import aiohttp
+from discord import app_commands
 from datetime import datetime, timezone
 
 intents = discord.Intents.default()
@@ -965,6 +966,70 @@ async def on_app_command_error(interaction: discord.Interaction, error):
             f"❌ Command error: `{error}`",
             ephemeral=True
         )
-        
+
+@bot.tree.command(name="purge", description="Delete messages in bulk")
+@app_commands.describe(amount="Number of messages to delete")
+async def purge(interaction: discord.Interaction, amount: int):
+
+    if not interaction.user.guild_permissions.manage_messages:
+        await interaction.response.send_message("❌ You need Manage Messages permission.", ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+
+    deleted = await interaction.channel.purge(limit=amount)
+
+    await interaction.followup.send(f"🧹 Deleted {len(deleted)} messages.", ephemeral=True)
+
+@bot.tree.command(name="calc", description="Calculate a math expression")
+@app_commands.describe(expression="Example: 5+5*2")
+async def calc(interaction: discord.Interaction, expression: str):
+
+    try:
+        result = eval(expression)
+
+        embed = discord.Embed(
+            title="🧮 Calculator",
+            description=f"**Expression:** `{expression}`\n**Result:** `{result}`",
+            color=discord.Color.blue()
+        )
+
+        await interaction.response.send_message(embed=embed)
+
+    except:
+        await interaction.response.send_message("❌ Invalid expression.")
+
+@bot.tree.command(name="lockall", description="Lock all channels in the server")
+async def lockall(interaction: discord.Interaction):
+
+    if not interaction.user.guild_permissions.manage_channels:
+        await interaction.response.send_message("❌ You need Manage Channels permission.", ephemeral=True)
+        return
+
+    guild = interaction.guild
+    role = guild.default_role
+
+    count = 0
+
+    for channel in guild.text_channels:
+        await channel.set_permissions(role, send_messages=False)
+        count += 1
+
+    await interaction.response.send_message(f"🔒 Locked {count} channels.")
+
+@bot.tree.command(name="slowmode", description="Set slowmode for this channel")
+@app_commands.describe(seconds="Slowmode delay in seconds")
+async def slowmode(interaction: discord.Interaction, seconds: int):
+
+    if not interaction.user.guild_permissions.manage_channels:
+        await interaction.response.send_message("❌ You need Manage Channels permission.", ephemeral=True)
+        return
+
+    await interaction.channel.edit(slowmode_delay=seconds)
+
+    await interaction.response.send_message(
+        f"🐢 Slowmode set to **{seconds} seconds**."
+    )
+    
 print("starting pulse...")
 bot.run(os.getenv("TOKEN"))
