@@ -20,7 +20,7 @@ async def on_ready():
     bot.add_view(CloseTicketView())
 
     try:
-        synced = await bot.tree.sync()
+        synced = await bot.tree.sync(guild=MY_GUILD)
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(f"Sync error: {e}")
@@ -34,7 +34,10 @@ async def on_ready():
     )
 
     print(f"Pulse is online as {bot.user}")
-    
+
+GUILD_ID = 1414144666651197473
+MY_GUILD = discord.Object(id=GUILD_ID)
+
 @bot.tree.command(name="ping", description="Check if Pulse is alive")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
