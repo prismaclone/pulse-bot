@@ -1,1 +1,43 @@
+⚡ Pulse — Discord Utility Bot
 
+Pulse is a modern, all-in-one Discord bot built to manage everything in your server with speed, simplicity, and style.
+
+⚡ Managing everything here
+
+✨ Features
+🛠️ Utility
+/ping — Check bot latency
+/hello — Quick greeting
+/uptime — See how long Pulse has been online
+/botinfo — Info about Pulse
+/avatar — Get a user's avatar
+/userinfo — View user details
+/serverinfo — Server statistics
+/membercount — Member breakdown
+🎉 Fun
+/8ball — Ask a question
+/coinflip — Flip a coin
+/choose — Pick between options
+/rate — Rate anything
+/roll — Roll a dice
+/meme — Fetch a random meme
+/roast — Roast someone 💀
+🛡️ Moderation (Full Pulse Access only)
+/purge — Delete messages
+/lock — Lock a channel
+/unlock — Unlock a channel
+/unlockall — Unlock all channels
+/warn — Warn a user
+/warnings — View warnings
+/clearwarnings — Clear warnings
+/nickname — Change nicknames
+/slowmode — Set slowmode
+🎟️ Ticket System
+Create tickets via panel
+Staff-only claim system
+Add/remove users
+Rename tickets
+Close tickets with transcript logging
+💡 Community
+/suggest — Submit suggestions with voting
+/remind — Set reminders
