@@ -4,6 +4,7 @@ import math
 import json
 import random
 import asyncio
+import aiohttp 
 from datetime import datetime, timezone, timedelta
 
 import discord
@@ -542,6 +543,33 @@ async def serverinfo(interaction: discord.Interaction):
 # =========================
 # FUN COMMANDS
 # =========================
+@bot.tree.command(name="meme", description="Get a random meme")
+async def meme(interaction: discord.Interaction):
+    await interaction.response.defer()  # prevents "application did not respond"
+
+    url = "https://meme-api.com/gimme"
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send("❌ Failed to fetch a meme. Try again.")
+                    return
+
+                data = await resp.json()
+
+        embed = discord.Embed(
+            title=data.get("title", "Random Meme"),
+            color=discord.Color.blurple()
+        )
+        embed.set_image(url=data["url"])
+        embed.set_footer(text=f"👍 {data.get('ups', 0)} | r/{data.get('subreddit', 'unknown')}")
+
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error fetching meme:\n`{e}`")
+
 @bot.tree.command(name="8ball", description="Ask the magic 8-ball a question")
 @app_commands.describe(question="Your question")
 async def eight_ball(interaction: discord.Interaction, question: str):
