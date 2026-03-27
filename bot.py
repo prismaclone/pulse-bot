@@ -958,6 +958,46 @@ async def remind(interaction: discord.Interaction, time: str, reminder: str):
 # =========================
 # STAFF COMMANDS
 # =========================
+@bot.tree.command(name="xpadd", description="Add XP to a user")
+@support_only()
+@app_commands.describe(user="The user to give XP to", amount="How much XP to add")
+async def xpadd(interaction: discord.Interaction, user: discord.Member, amount: int):
+    if amount <= 0:
+        await interaction.response.send_message("❌ XP amount must be greater than 0.", ephemeral=True)
+        return
+
+    user_id = str(user.id)
+
+    if user_id not in xp_data:
+        xp_data[user_id] = {"xp": 0, "last": 0}
+
+    old_level = get_level(xp_data[user_id]["xp"])
+    xp_data[user_id]["xp"] += amount
+    new_level = get_level(xp_data[user_id]["xp"])
+
+    save_xp(xp_data)
+
+    msg = f"✅ Added **{amount} XP** to {user.mention}."
+
+    if new_level > old_level:
+        msg += f"\n🎉 They leveled up to **Level {new_level}**!"
+
+        if LEVEL_UP_CHANNEL_ID:
+            channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
+            if channel:
+                await channel.send(f"🎉 {user.mention} leveled up to **Level {new_level}**!")
+
+        for level_required, role_id in LEVEL_ROLES.items():
+            if old_level < level_required <= new_level:
+                role = interaction.guild.get_role(role_id)
+                if role:
+                    try:
+                        await user.add_roles(role, reason="Level reward from xpadd command")
+                    except discord.Forbidden:
+                        pass
+
+    await interaction.response.send_message(msg)
+
 @bot.tree.command(name="say", description="Make Pulse send a message")
 @support_only()
 @app_commands.describe(message="The message to send")
