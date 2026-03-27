@@ -37,7 +37,7 @@ XP_COOLDOWN = 15
 
 LEVEL_UP_CHANNEL_ID = 1403833600469762058 
 
-XP_RESET_INTERVAL = "weekly"  # "daily", "weekly", "monthly", or None
+XP_RESET_INTERVAL = "monthly"  # "daily", "weekly", "monthly", or None
 
 LEVEL_ROLES = {
 
