@@ -55,17 +55,34 @@ def load_xp():
     except:
         return {}
 
+
 def save_xp(data):
     with open(XP_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
+
 xp_data = load_xp()
 
-def get_level(xp):
-    return int((xp / 100) ** 0.5)
 
-def get_xp_for_level(level):
-    return (level ** 2) * 100
+def ensure_xp_user(user_id: str):
+    if user_id not in xp_data:
+        xp_data[user_id] = {"xp": 0, "level": 0, "last": 0}
+    else:
+        xp_data[user_id].setdefault("xp", 0)
+        xp_data[user_id].setdefault("level", 0)
+        xp_data[user_id].setdefault("last", 0)
+
+
+def get_xp_for_level(level: int) -> int:
+    return 100 * (level ** 2)
+
+
+def get_level_from_xp(xp: int) -> int:
+    level = 0
+    while xp >= get_xp_for_level(level + 1):
+        level += 1
+    return level
+
 
 async def xp_reset_task():
     await bot.wait_until_ready()
@@ -75,13 +92,10 @@ async def xp_reset_task():
 
         if XP_RESET_INTERVAL == "daily":
             next_run = now + timedelta(days=1)
-
         elif XP_RESET_INTERVAL == "weekly":
             next_run = now + timedelta(days=7)
-
         elif XP_RESET_INTERVAL == "monthly":
             next_run = now + timedelta(days=30)
-
         else:
             return
 
@@ -406,15 +420,13 @@ class TicketControlView(discord.ui.View):
 @bot.event
 async def on_message(message):
     if message.author.bot or not message.guild:
+        await bot.process_commands(message)
         return
 
     user_id = str(message.author.id)
-
-    if user_id not in xp_data:
-        xp_data[user_id] = {"xp": 0, "last": 0}
+    ensure_xp_user(user_id)
 
     now = time.time()
-
     if now - xp_data[user_id]["last"] < XP_COOLDOWN:
         await bot.process_commands(message)
         return
@@ -423,25 +435,32 @@ async def on_message(message):
     xp_data[user_id]["xp"] += xp_gain
     xp_data[user_id]["last"] = now
 
-    old_level = get_level(xp_data[user_id]["xp"] - xp_gain)
-    new_level = get_level(xp_data[user_id]["xp"])
+    old_level = xp_data[user_id]["level"]
+    new_level = get_level_from_xp(xp_data[user_id]["xp"])
 
     if new_level > old_level:
-        # 🎉 level up message
+        xp_data[user_id]["level"] = new_level
+
         channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
         if channel:
-            await channel.send(f"🎉 {message.author.mention} leveled up to **Level {new_level}**!")
+            await channel.send(
+                f"🎉 {message.author.mention} leveled up to **Level {new_level}**!"
+            )
 
-        # 🎭 role rewards
-        if new_level in LEVEL_ROLES:
-            role = message.guild.get_role(LEVEL_ROLES[new_level])
-            if role:
-                await message.author.add_roles(role)
+        for level_required, role_id in LEVEL_ROLES.items():
+            if old_level < level_required <= new_level:
+                role = message.guild.get_role(role_id)
+                if role:
+                    try:
+                        await message.author.add_roles(role, reason="Level reward")
+                    except discord.Forbidden:
+                        pass
+    else:
+        xp_data[user_id]["level"] = new_level
 
     save_xp(xp_data)
-
     await bot.process_commands(message)
-
+    
 @bot.event
 async def on_ready():
     bot.add_view(TicketPanelView())
@@ -495,20 +514,23 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 # BASIC COMMANDS
 # =========================
 @bot.tree.command(name="rank", description="Check your level and XP")
+@app_commands.describe(user="The user to check")
 async def rank(interaction: discord.Interaction, user: discord.Member = None):
     target = user or interaction.user
     user_id = str(target.id)
 
-    if user_id not in xp_data:
-        await interaction.response.send_message("No data yet.", ephemeral=True)
-        return
+    ensure_xp_user(user_id)
 
     xp = xp_data[user_id]["xp"]
-    level = get_level(xp)
-    next_xp = get_xp_for_level(level + 1)
+    level = xp_data[user_id]["level"]
+    current_level_xp = get_xp_for_level(level)
+    next_level_xp = get_xp_for_level(level + 1)
 
     await interaction.response.send_message(
-        f"📊 {target.mention}\nLevel: **{level}**\nXP: **{xp}/{next_xp}**"
+        f"📊 {target.mention}\n"
+        f"**Level:** {level}\n"
+        f"**Total XP:** {xp}\n"
+        f"**Progress:** {xp - current_level_xp}/{next_level_xp - current_level_xp} XP"
     )
 
 @bot.tree.command(name="leaderboard", description="Top XP users")
@@ -967,13 +989,12 @@ async def xpadd(interaction: discord.Interaction, user: discord.Member, amount: 
         return
 
     user_id = str(user.id)
+    ensure_xp_user(user_id)
 
-    if user_id not in xp_data:
-        xp_data[user_id] = {"xp": 0, "last": 0}
-
-    old_level = get_level(xp_data[user_id]["xp"])
+    old_level = xp_data[user_id]["level"]
     xp_data[user_id]["xp"] += amount
-    new_level = get_level(xp_data[user_id]["xp"])
+    new_level = get_level_from_xp(xp_data[user_id]["xp"])
+    xp_data[user_id]["level"] = new_level
 
     save_xp(xp_data)
 
@@ -982,10 +1003,9 @@ async def xpadd(interaction: discord.Interaction, user: discord.Member, amount: 
     if new_level > old_level:
         msg += f"\n🎉 They leveled up to **Level {new_level}**!"
 
-        if LEVEL_UP_CHANNEL_ID:
-            channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-            if channel:
-                await channel.send(f"🎉 {user.mention} leveled up to **Level {new_level}**!")
+        channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
+        if channel:
+            await channel.send(f"🎉 {user.mention} leveled up to **Level {new_level}**!")
 
         for level_required, role_id in LEVEL_ROLES.items():
             if old_level < level_required <= new_level:
