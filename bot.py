@@ -41,7 +41,7 @@ XP_RESET_INTERVAL = "weekly"  # "daily", "weekly", "monthly", or None
 
 LEVEL_ROLES = {
 
-    1: 1404861873496784977
+    1: 1404861873496784977,
     5: 1404864179134926928,   # level: role_id
     10: 1404864410496929862,
     15: 1404864473990168657,
