@@ -460,7 +460,47 @@ async def on_message(message):
 
     save_xp(xp_data)
     await bot.process_commands(message)
-    
+
+async def xp_reset_task():
+    await bot.wait_until_ready()
+
+    while True:
+        now = datetime.now()
+
+        if XP_RESET_INTERVAL == "daily":
+            next_run = now + timedelta(days=1)
+        elif XP_RESET_INTERVAL == "weekly":
+            next_run = now + timedelta(days=7)
+        elif XP_RESET_INTERVAL == "monthly":
+            next_run = now + timedelta(days=30)
+        else:
+            return
+
+        await asyncio.sleep((next_run - now).total_seconds())
+
+        # remove all level reward roles before wiping XP
+        for guild in bot.guilds:
+            for member in guild.members:
+                roles_to_remove = []
+
+                for role_id in LEVEL_ROLES.values():
+                    role = guild.get_role(role_id)
+                    if role and role in member.roles:
+                        roles_to_remove.append(role)
+
+                if roles_to_remove:
+                    try:
+                        await member.remove_roles(*roles_to_remove, reason="XP reset")
+                    except discord.Forbidden:
+                        print(f"Couldn't remove XP roles from {member} in {guild.name}")
+                    except Exception as e:
+                        print(f"Error removing XP roles from {member}: {e}")
+
+        xp_data.clear()
+        save_xp(xp_data)
+
+        print("XP reset completed.")
+
 @bot.event
 async def on_ready():
     bot.add_view(TicketPanelView())
@@ -489,9 +529,10 @@ async def on_ready():
     except Exception as e:
         print(f"Global sync error: {e}")
 
-    # 🔥 ADD THIS RIGHT HERE
-    bot.loop.create_task(xp_reset_task())
-
+    if not hasattr(bot, "xp_task_started"):
+        bot.loop.create_task(xp_reset_task())
+        bot.xp_task_started = True
+     
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
     if isinstance(error, app_commands.errors.CheckFailure):
