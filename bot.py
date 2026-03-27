@@ -543,6 +543,39 @@ async def serverinfo(interaction: discord.Interaction):
 # =========================
 # FUN COMMANDS
 # =========================
+@bot.tree.command(name="dadjoke", description="Get a dad joke")
+async def dadjoke(interaction: discord.Interaction):
+    jokes = [
+        "I only know 25 letters of the alphabet… I don’t know y.",
+        "Why did the scarecrow win an award? Because he was outstanding in his field.",
+        "I told my computer I needed a break… it said no problem — it froze.",
+        "Why don’t skeletons fight each other? They don’t have the guts.",
+        "I’m reading a book about anti-gravity… it’s impossible to put down."
+    ]
+
+    await interaction.response.send_message(random.choice(jokes))
+
+@bot.tree.command(name="clown", description="Call someone a clown 🤡")
+@app_commands.describe(user="The clown")
+async def clown(interaction: discord.Interaction, user: discord.Member):
+    await interaction.response.send_message(f"{user.mention} certified clown 🤡")
+
+@bot.tree.command(name="ship", description="Ship two users together")
+@app_commands.describe(user1="First user", user2="Second user")
+async def ship(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
+    percentage = random.randint(0, 100)
+
+    if percentage > 80:
+        msg = "💖 PERFECT MATCH"
+    elif percentage > 50:
+        msg = "💕 pretty solid"
+    else:
+        msg = "💀 yeah... no"
+
+    await interaction.response.send_message(
+        f"{user1.mention} ❤️ {user2.mention}\n**{percentage}%** — {msg}"
+    )
+
 @bot.tree.command(name="roast", description="Roast someone 💀")
 @app_commands.describe(user="The user to roast")
 async def roast(interaction: discord.Interaction, user: discord.Member = None):
