@@ -2,6 +2,7 @@ import os
 import io
 import math
 import json
+import time
 import random
 import asyncio
 import aiohttp 
@@ -27,6 +28,70 @@ TRANSCRIPT_CHANNEL_ID = 1482669955702067200
 SUPPORT_ROLE_NAME = "Full Pulse Access"
 TICKET_CATEGORY_NAME = "Tickets"
 
+# LEVELING
+
+XP_FILE = "xp_data.json"
+
+XP_PER_MESSAGE = (5, 15)  # random XP range
+XP_COOLDOWN = 15
+
+LEVEL_UP_CHANNEL_ID = 1403833600469762058 
+
+XP_RESET_INTERVAL = "weekly"  # "daily", "weekly", "monthly", or None
+
+LEVEL_ROLES = {
+
+    1: 1404861873496784977
+    5: 1404864179134926928,   # level: role_id
+    10: 1404864410496929862,
+    15: 1404864473990168657,
+    25: 1404864535491248239
+}
+
+def load_xp():
+    try:
+        with open(XP_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_xp(data):
+    with open(XP_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+xp_data = load_xp()
+
+def get_level(xp):
+    return int((xp / 100) ** 0.5)
+
+def get_xp_for_level(level):
+    return (level ** 2) * 100
+
+async def xp_reset_task():
+    await bot.wait_until_ready()
+
+    while True:
+        now = datetime.now()
+
+        if XP_RESET_INTERVAL == "daily":
+            next_run = now + timedelta(days=1)
+
+        elif XP_RESET_INTERVAL == "weekly":
+            next_run = now + timedelta(days=7)
+
+        elif XP_RESET_INTERVAL == "monthly":
+            next_run = now + timedelta(days=30)
+
+        else:
+            return
+
+        await asyncio.sleep((next_run - now).total_seconds())
+
+        xp_data.clear()
+        save_xp(xp_data)
+
+        print("XP reset completed.")
+    
 # =========================
 # INTENTS / BOT SETUP
 # =========================
@@ -339,6 +404,45 @@ class TicketControlView(discord.ui.View):
 # EVENTS
 # =========================
 @bot.event
+async def on_message(message):
+    if message.author.bot or not message.guild:
+        return
+
+    user_id = str(message.author.id)
+
+    if user_id not in xp_data:
+        xp_data[user_id] = {"xp": 0, "last": 0}
+
+    now = time.time()
+
+    if now - xp_data[user_id]["last"] < XP_COOLDOWN:
+        await bot.process_commands(message)
+        return
+
+    xp_gain = random.randint(*XP_PER_MESSAGE)
+    xp_data[user_id]["xp"] += xp_gain
+    xp_data[user_id]["last"] = now
+
+    old_level = get_level(xp_data[user_id]["xp"] - xp_gain)
+    new_level = get_level(xp_data[user_id]["xp"])
+
+    if new_level > old_level:
+        # 🎉 level up message
+        channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
+        if channel:
+            await channel.send(f"🎉 {message.author.mention} leveled up to **Level {new_level}**!")
+
+        # 🎭 role rewards
+        if new_level in LEVEL_ROLES:
+            role = message.guild.get_role(LEVEL_ROLES[new_level])
+            if role:
+                await message.author.add_roles(role)
+
+    save_xp(xp_data)
+
+    await bot.process_commands(message)
+
+@bot.event
 async def on_ready():
     bot.add_view(TicketPanelView())
     bot.add_view(TicketControlView())
@@ -366,6 +470,8 @@ async def on_ready():
     except Exception as e:
         print(f"Global sync error: {e}")
 
+    # 🔥 ADD THIS RIGHT HERE
+    bot.loop.create_task(xp_reset_task())
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -388,6 +494,40 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 # =========================
 # BASIC COMMANDS
 # =========================
+@bot.tree.command(name="rank", description="Check your level and XP")
+async def rank(interaction: discord.Interaction, user: discord.Member = None):
+    target = user or interaction.user
+    user_id = str(target.id)
+
+    if user_id not in xp_data:
+        await interaction.response.send_message("No data yet.", ephemeral=True)
+        return
+
+    xp = xp_data[user_id]["xp"]
+    level = get_level(xp)
+    next_xp = get_xp_for_level(level + 1)
+
+    await interaction.response.send_message(
+        f"📊 {target.mention}\nLevel: **{level}**\nXP: **{xp}/{next_xp}**"
+    )
+
+@bot.tree.command(name="leaderboard", description="Top XP users")
+async def leaderboard(interaction: discord.Interaction):
+    sorted_users = sorted(xp_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:10]
+
+    desc = ""
+    for i, (user_id, data) in enumerate(sorted_users, 1):
+        user = await bot.fetch_user(int(user_id))
+        desc += f"**{i}.** {user.name} — {data['xp']} XP\n"
+
+    embed = discord.Embed(
+        title="🏆 Leaderboard",
+        description=desc or "No data yet.",
+        color=discord.Color.gold()
+    )
+
+    await interaction.response.send_message(embed=embed)
+
 @bot.tree.command(name="ping", description="Check if Pulse is alive")
 async def ping(interaction: discord.Interaction):
     latency = round(bot.latency * 1000)
