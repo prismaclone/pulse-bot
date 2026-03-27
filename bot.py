@@ -1021,6 +1021,35 @@ async def remind(interaction: discord.Interaction, time: str, reminder: str):
 # =========================
 # STAFF COMMANDS
 # =========================
+@bot.tree.command(name="xpreset", description="Reset all XP and remove level roles")
+@support_only()
+async def xpreset(interaction: discord.Interaction):
+    await interaction.response.defer()
+
+    for guild in bot.guilds:
+        for member in guild.members:
+            roles_to_remove = []
+
+            for role_id in LEVEL_ROLES.values():
+                role = guild.get_role(role_id)
+                if role and role in member.roles:
+                    roles_to_remove.append(role)
+
+            if roles_to_remove:
+                try:
+                    await member.remove_roles(*roles_to_remove, reason="Manual XP reset")
+                except:
+                    pass
+
+    xp_data.clear()
+    save_xp(xp_data)
+
+    channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
+    if channel:
+        await channel.send("🔄 XP has been manually reset.")
+
+    await interaction.followup.send("✅ XP reset completed.")
+
 @bot.tree.command(name="xpadd", description="Add XP to a user")
 @support_only()
 @app_commands.describe(user="The user to give XP to", amount="How much XP to add")
