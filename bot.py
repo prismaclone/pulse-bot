@@ -478,6 +478,15 @@ async def help_command(interaction: discord.Interaction):
 # =========================
 # UTILITY COMMANDS
 # =========================
+@bot.tree.command(name="calc", description="Calculate a math expression")
+@app_commands.describe(expression="Example: 5+5*2")
+async def calc(interaction: discord.Interaction, expression: str):
+    try:
+        result = eval(expression, {"__builtins__": {}})
+        await interaction.response.send_message(f"🧮 Result: **{result}**")
+    except:
+        await interaction.response.send_message("❌ Invalid expression.", ephemeral=True)
+
 @bot.tree.command(name="avatar", description="Show a user's avatar")
 @app_commands.describe(user="The user to view")
 async def avatar(interaction: discord.Interaction, user: discord.Member | None = None):
