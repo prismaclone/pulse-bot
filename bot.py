@@ -572,10 +572,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 async def test(ctx):
     await ctx.send("⚡ prefix works!")
 
-@bot.tree.command(name="rank", description="Check your level and XP")
-@app_commands.describe(user="The user to check")
-async def rank(interaction: discord.Interaction, user: discord.Member = None):
-    target = user or interaction.user
+@bot.hybrid_command(name="rank", description="Check your level and XP")
+async def rank(ctx, user: discord.Member = None):
+    target = user or ctx.author
     user_id = str(target.id)
 
     ensure_xp_user(user_id)
@@ -585,15 +584,15 @@ async def rank(interaction: discord.Interaction, user: discord.Member = None):
     current_level_xp = get_xp_for_level(level)
     next_level_xp = get_xp_for_level(level + 1)
 
-    await interaction.response.send_message(
+    await ctx.send(
         f"📊 {target.mention}\n"
         f"**Level:** {level}\n"
         f"**Total XP:** {xp}\n"
         f"**Progress:** {xp - current_level_xp}/{next_level_xp - current_level_xp} XP"
     )
 
-@bot.tree.command(name="leaderboard", description="Top XP users")
-async def leaderboard(interaction: discord.Interaction):
+@bot.hybrid_command(name="leaderboard", description="Top XP users")
+async def leaderboard(ctx):
     sorted_users = sorted(xp_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:10]
 
     desc = ""
@@ -607,7 +606,7 @@ async def leaderboard(interaction: discord.Interaction):
         color=discord.Color.gold()
     )
 
-    await interaction.response.send_message(embed=embed)
+    await ctx.send(embed=embed)
 
 @bot.hybrid_command(name="ping", description="Check if Pulse is alive")
 async def ping(ctx):
@@ -639,8 +638,8 @@ async def botinfo(ctx):
 
     await ctx.send(embed=embed)
 
-@bot.tree.command(name="help", description="Show Pulse commands")
-async def help_command(interaction: discord.Interaction):
+@bot.hybrid_command(name="help", description="Show Pulse commands")
+async def help_command(ctx):
     embed = discord.Embed(
         title="📘 Pulse Commands",
         description="Here are the current commands for Pulse.",
@@ -650,8 +649,16 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="General",
         value=(
-            "`/ping` `/hello` `/uptime` `/botinfo` `/help`\n"
-            "`/avatar` `/serverinfo` `/userinfo`"
+            "`/ping` `p!ping`\n"
+            "`/hello` `p!hello`\n"
+            "`/uptime` `p!uptime`\n"
+            "`/botinfo` `p!botinfo`\n"
+            "`/help` `p!help`\n"
+            "`/rank` `p!rank`\n"
+            "`/leaderboard` `p!leaderboard`\n"
+            "`/avatar` `p!avatar`\n"
+            "`/serverinfo` `p!serverinfo`\n"
+            "`/userinfo` `p!userinfo`"
         ),
         inline=False
     )
@@ -659,7 +666,15 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="Fun",
         value=(
-            "`/8ball` `/coinflip` `/choose` `/rate`"
+            "`/dadjoke` `p!dadjoke`\n"
+            "`/clown` `p!clown`\n"
+            "`/ship` `p!ship`\n"
+            "`/roast` `p!roast`\n"
+            "`/meme` `p!meme`\n"
+            "`/8ball` `p!8ball`\n"
+            "`/coinflip` `p!coinflip`\n"
+            "`/choose` `p!choose`\n"
+            "`/rate` `p!rate`"
         ),
         inline=False
     )
@@ -683,31 +698,29 @@ async def help_command(interaction: discord.Interaction):
     embed.add_field(
         name="Staff Only",
         value=(
+            "`/xpreset` `/xpadd` `/removexp`\n"
             "`/say` `/embed` `/lock` `/unlock` `/unlockall`\n"
             "`/purge` `/warn` `/warnings` `/clearwarnings`"
         ),
         inline=False
     )
 
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
+    await ctx.send(embed=embed)
 
 # =========================
 # UTILITY COMMANDS
 # =========================
-@bot.tree.command(name="calc", description="Calculate a math expression")
-@app_commands.describe(expression="Example: 5+5*2")
-async def calc(interaction: discord.Interaction, expression: str):
+@bot.hybrid_command(name="calc", description="Calculate a math expression")
+async def calc(ctx, *, expression: str):
     try:
         result = eval(expression, {"__builtins__": {}})
-        await interaction.response.send_message(f"🧮 Result: **{result}**")
-    except:
-        await interaction.response.send_message("❌ Invalid expression.", ephemeral=True)
+        await ctx.send(f"🧮 Result: **{result}**")
+    except Exception:
+        await ctx.send("❌ Invalid expression.")
 
-@bot.tree.command(name="avatar", description="Show a user's avatar")
-@app_commands.describe(user="The user to view")
-async def avatar(interaction: discord.Interaction, user: discord.Member | None = None):
-    user = user or interaction.user
+@bot.hybrid_command(name="avatar", description="Show a user's avatar")
+async def avatar(ctx, user: discord.Member = None):
+    user = user or ctx.author
 
     embed = discord.Embed(
         title=f"🖼️ {user.display_name}'s Avatar",
@@ -715,13 +728,11 @@ async def avatar(interaction: discord.Interaction, user: discord.Member | None =
     )
     embed.set_image(url=user.display_avatar.url)
 
-    await interaction.response.send_message(embed=embed)
+    await ctx.send(embed=embed)
 
-
-@bot.tree.command(name="userinfo", description="Show info about a user")
-@app_commands.describe(user="The user to view")
-async def userinfo(interaction: discord.Interaction, user: discord.Member | None = None):
-    user = user or interaction.user
+@bot.hybrid_command(name="userinfo", description="Show info about a user")
+async def userinfo(ctx, user: discord.Member = None):
+    user = user or ctx.author
 
     embed = discord.Embed(
         title=f"👤 User Info - {user}",
@@ -731,18 +742,29 @@ async def userinfo(interaction: discord.Interaction, user: discord.Member | None
     embed.set_thumbnail(url=user.display_avatar.url)
     embed.add_field(name="ID", value=str(user.id), inline=False)
     embed.add_field(name="Display Name", value=user.display_name, inline=True)
-    embed.add_field(name="Joined Server", value=user.joined_at.strftime("%Y-%m-%d %H:%M UTC") if user.joined_at else "Unknown", inline=False)
-    embed.add_field(name="Created Account", value=user.created_at.strftime("%Y-%m-%d %H:%M UTC"), inline=False)
-    embed.add_field(name="Top Role", value=user.top_role.mention if user.top_role else "None", inline=False)
+    embed.add_field(
+        name="Joined Server",
+        value=user.joined_at.strftime("%Y-%m-%d %H:%M UTC") if user.joined_at else "Unknown",
+        inline=False
+    )
+    embed.add_field(
+        name="Created Account",
+        value=user.created_at.strftime("%Y-%m-%d %H:%M UTC"),
+        inline=False
+    )
+    embed.add_field(
+        name="Top Role",
+        value=user.top_role.mention if user.top_role else "None",
+        inline=False
+    )
 
-    await interaction.response.send_message(embed=embed)
+    await ctx.send(embed=embed)
 
-
-@bot.tree.command(name="serverinfo", description="Show server information")
-async def serverinfo(interaction: discord.Interaction):
-    guild = interaction.guild
+@bot.hybrid_command(name="serverinfo", description="Show server information")
+async def serverinfo(ctx):
+    guild = ctx.guild
     if guild is None:
-        await interaction.response.send_message("❌ This command only works in a server.", ephemeral=True)
+        await ctx.send("❌ This command only works in a server.")
         return
 
     text_channels = len(guild.text_channels)
@@ -763,14 +785,13 @@ async def serverinfo(interaction: discord.Interaction):
     embed.add_field(name="Voice Channels", value=str(voice_channels), inline=True)
     embed.add_field(name="Created", value=guild.created_at.strftime("%Y-%m-%d %H:%M UTC"), inline=False)
 
-    await interaction.response.send_message(embed=embed)
-
+    await ctx.send(embed=embed)
 
 # =========================
 # FUN COMMANDS
 # =========================
-@bot.tree.command(name="dadjoke", description="Get a dad joke")
-async def dadjoke(interaction: discord.Interaction):
+@bot.hybrid_command(name="dadjoke", description="Get a dad joke")
+async def dadjoke(ctx):
     jokes = [
         "I only know 25 letters of the alphabet… I don’t know y.",
         "Why did the scarecrow win an award? Because he was outstanding in his field.",
@@ -779,16 +800,14 @@ async def dadjoke(interaction: discord.Interaction):
         "I’m reading a book about anti-gravity… it’s impossible to put down."
     ]
 
-    await interaction.response.send_message(random.choice(jokes))
+    await ctx.send(random.choice(jokes))
 
-@bot.tree.command(name="clown", description="Call someone a clown 🤡")
-@app_commands.describe(user="The clown")
-async def clown(interaction: discord.Interaction, user: discord.Member):
-    await interaction.response.send_message(f"{user.mention} certified clown 🤡")
+@bot.hybrid_command(name="clown", description="Call someone a clown 🤡")
+async def clown(ctx, user: discord.Member):
+    await ctx.send(f"{user.mention} certified clown 🤡")
 
-@bot.tree.command(name="ship", description="Ship two users together")
-@app_commands.describe(user1="First user", user2="Second user")
-async def ship(interaction: discord.Interaction, user1: discord.Member, user2: discord.Member):
+@bot.hybrid_command(name="ship", description="Ship two users together")
+async def ship(ctx, user1: discord.Member, user2: discord.Member):
     percentage = random.randint(0, 100)
 
     if percentage > 80:
@@ -798,14 +817,13 @@ async def ship(interaction: discord.Interaction, user1: discord.Member, user2: d
     else:
         msg = "💀 yeah... no"
 
-    await interaction.response.send_message(
+    await ctx.send(
         f"{user1.mention} ❤️ {user2.mention}\n**{percentage}%** — {msg}"
     )
 
-@bot.tree.command(name="roast", description="Roast someone 💀")
-@app_commands.describe(user="The user to roast")
-async def roast(interaction: discord.Interaction, user: discord.Member = None):
-    target = user or interaction.user
+@bot.hybrid_command(name="roast", description="Roast someone 💀")
+async def roast(ctx, user: discord.Member = None):
+    target = user or ctx.author
 
     roasts = [
         f"{target.mention} you have the personality of a loading screen",
@@ -905,11 +923,11 @@ async def roast(interaction: discord.Interaction, user: discord.Member = None):
         f"{target.mention} you make wrong decisions confidently",
     ]
 
-    await interaction.response.send_message(random.choice(roasts))
+    await ctx.send(random.choice(roasts))
 
-@bot.tree.command(name="meme", description="Get a random meme")
-async def meme(interaction: discord.Interaction):
-    await interaction.response.defer()  # prevents "application did not respond"
+@bot.hybrid_command(name="meme", description="Get a random meme")
+async def meme(ctx):
+    await ctx.defer()
 
     url = "https://meme-api.com/gimme"
 
@@ -917,7 +935,7 @@ async def meme(interaction: discord.Interaction):
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200:
-                    await interaction.followup.send("❌ Failed to fetch a meme. Try again.")
+                    await ctx.send("❌ Failed to fetch a meme. Try again.")
                     return
 
                 data = await resp.json()
@@ -929,14 +947,13 @@ async def meme(interaction: discord.Interaction):
         embed.set_image(url=data["url"])
         embed.set_footer(text=f"👍 {data.get('ups', 0)} | r/{data.get('subreddit', 'unknown')}")
 
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error fetching meme:\n`{e}`")
+        await ctx.send(f"❌ Error fetching meme:\n`{e}`")
 
-@bot.tree.command(name="8ball", description="Ask the magic 8-ball a question")
-@app_commands.describe(question="Your question")
-async def eight_ball(interaction: discord.Interaction, question: str):
+@bot.hybrid_command(name="8ball", description="Ask the magic 8-ball a question")
+async def eight_ball(ctx, *, question: str):
     responses = [
         "Yes.",
         "No.",
@@ -949,45 +966,35 @@ async def eight_ball(interaction: discord.Interaction, question: str):
         "Ask again later.",
         "The signs point to yes."
     ]
-    await interaction.response.send_message(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
+    await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
 
+@bot.hybrid_command(name="coinflip", description="Flip a coin")
+async def coinflip(ctx):
+    await ctx.send(f"🪙 The coin landed on **{random.choice(['Heads', 'Tails'])}**!")
 
-@bot.tree.command(name="coinflip", description="Flip a coin")
-async def coinflip(interaction: discord.Interaction):
-    await interaction.response.send_message(f"🪙 The coin landed on **{random.choice(['Heads', 'Tails'])}**!")
-
-
-@bot.tree.command(name="choose", description="Choose from options separated by commas")
-@app_commands.describe(options="Example: pizza, tacos, burgers")
-async def choose(interaction: discord.Interaction, options: str):
+@bot.hybrid_command(name="choose", description="Choose from options separated by commas")
+async def choose(ctx, *, options: str):
     choices = [choice.strip() for choice in options.split(",") if choice.strip()]
     if len(choices) < 2:
-        await interaction.response.send_message("❌ Give me at least 2 options separated by commas.", ephemeral=True)
+        await ctx.send("❌ Give me at least 2 options separated by commas.")
         return
 
-    await interaction.response.send_message(f"🤔 I choose: **{random.choice(choices)}**")
+    await ctx.send(f"🤔 I choose: **{random.choice(choices)}**")
 
-
-@bot.tree.command(name="rate", description="Rate something from 1 to 10")
-@app_commands.describe(thing="What should Pulse rate?")
-async def rate(interaction: discord.Interaction, thing: str):
+@bot.hybrid_command(name="rate", description="Rate something from 1 to 10")
+async def rate(ctx, *, thing: str):
     score = random.randint(1, 10)
-    await interaction.response.send_message(f"📊 I rate **{thing}** a **{score}/10**")
-
+    await ctx.send(f"📊 I rate **{thing}** a **{score}/10**")
 
 # =========================
 # COMMUNITY COMMANDS
 # =========================
-@bot.tree.command(name="suggest", description="Send a suggestion")
-@app_commands.describe(suggestion="Your suggestion")
-async def suggest(interaction: discord.Interaction, suggestion: str):
+@bot.hybrid_command(name="suggest", description="Send a suggestion")
+async def suggest(ctx, *, suggestion: str):
     channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
 
     if channel is None or not isinstance(channel, discord.TextChannel):
-        await interaction.response.send_message(
-            "❌ Suggestion channel not found. Check `SUGGESTION_CHANNEL_ID`.",
-            ephemeral=True
-        )
+        await ctx.send("❌ Suggestion channel not found. Check `SUGGESTION_CHANNEL_ID`.")
         return
 
     embed = discord.Embed(
@@ -996,49 +1003,45 @@ async def suggest(interaction: discord.Interaction, suggestion: str):
         color=discord.Color.gold(),
         timestamp=datetime.now(timezone.utc)
     )
-    embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
-    embed.set_footer(text=f"User ID: {interaction.user.id}")
+    embed.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
+    embed.set_footer(text=f"User ID: {ctx.author.id}")
 
     msg = await channel.send(embed=embed)
     await msg.add_reaction("✅")
     await msg.add_reaction("❌")
 
-    await interaction.response.send_message("✅ Your suggestion has been sent!", ephemeral=True)
+    await ctx.send("✅ Your suggestion has been sent!")
 
-
-@bot.tree.command(name="remind", description="Set a reminder")
-@app_commands.describe(time="Example: 10s, 5m, 2h, 1d", reminder="What should I remind you about?")
-async def remind(interaction: discord.Interaction, time: str, reminder: str):
+@bot.hybrid_command(name="remind", description="Set a reminder")
+async def remind(ctx, time: str, *, reminder: str):
     seconds = parse_duration(time)
     if seconds is None:
-        await interaction.response.send_message(
-            "❌ Invalid time format. Use things like `10s`, `5m`, `2h`, or `1d`.",
-            ephemeral=True
-        )
+        await ctx.send("❌ Invalid time format. Use `10s`, `5m`, `2h`, or `1d`.")
         return
 
-    await interaction.response.send_message(
-        f"⏰ Okay {interaction.user.mention}, I’ll remind you in **{time}**: {reminder}",
-        ephemeral=True
+    await ctx.send(
+        f"⏰ Okay {ctx.author.mention}, I’ll remind you in **{time}**: {reminder}"
     )
 
     await asyncio.sleep(seconds)
 
     try:
-        await interaction.user.send(f"⏰ Reminder: **{reminder}**")
+        await ctx.author.send(f"⏰ Reminder: **{reminder}**")
     except discord.Forbidden:
-        channel_msg = f"{interaction.user.mention} ⏰ Reminder: **{reminder}**"
-        if interaction.channel:
-            await interaction.channel.send(channel_msg)
-
+        if ctx.channel:
+            await ctx.channel.send(f"{ctx.author.mention} ⏰ Reminder: **{reminder}**")
 
 # =========================
 # STAFF COMMANDS
 # =========================
-@bot.tree.command(name="xpreset", description="Reset all XP and remove level roles")
-@support_only()
-async def xpreset(interaction: discord.Interaction):
-    await interaction.response.defer()
+@bot.hybrid_command(name="xpreset", description="Reset all XP and remove level roles")
+@commands.guild_only()
+async def xpreset(ctx):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
+
+    await ctx.defer()
 
     for guild in bot.guilds:
         for member in guild.members:
@@ -1052,7 +1055,7 @@ async def xpreset(interaction: discord.Interaction):
             if roles_to_remove:
                 try:
                     await member.remove_roles(*roles_to_remove, reason="Manual XP reset")
-                except:
+                except Exception:
                     pass
 
     xp_data.clear()
@@ -1062,14 +1065,17 @@ async def xpreset(interaction: discord.Interaction):
     if channel:
         await channel.send("🔄 XP has been manually reset.")
 
-    await interaction.followup.send("✅ XP reset completed.")
+    await ctx.send("✅ XP reset completed.")
 
-@bot.tree.command(name="xpadd", description="Add XP to a user")
-@support_only()
-@app_commands.describe(user="The user to give XP to", amount="How much XP to add")
-async def xpadd(interaction: discord.Interaction, user: discord.Member, amount: int):
+@bot.hybrid_command(name="xpadd", description="Add XP to a user")
+@commands.guild_only()
+async def xpadd(ctx, user: discord.Member, amount: int):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
+
     if amount <= 0:
-        await interaction.response.send_message("❌ XP amount must be greater than 0.", ephemeral=True)
+        await ctx.send("❌ XP amount must be greater than 0.")
         return
 
     user_id = str(user.id)
@@ -1093,100 +1099,118 @@ async def xpadd(interaction: discord.Interaction, user: discord.Member, amount: 
 
         for level_required, role_id in LEVEL_ROLES.items():
             if old_level < level_required <= new_level:
-                role = interaction.guild.get_role(role_id)
+                role = ctx.guild.get_role(role_id)
                 if role:
                     try:
                         await user.add_roles(role, reason="Level reward from xpadd command")
                     except discord.Forbidden:
                         pass
 
-    await interaction.response.send_message(msg)
+    await ctx.send(msg)
 
-@bot.tree.command(name="say", description="Make Pulse send a message")
-@support_only()
-@app_commands.describe(message="The message to send")
-async def say(interaction: discord.Interaction, message: str):
-    await interaction.response.send_message("✅ Sent.", ephemeral=True)
-    await interaction.channel.send(message)
+@bot.hybrid_command(name="say", description="Make Pulse send a message")
+@commands.guild_only()
+async def say(ctx, *, message: str):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
+    await ctx.send("✅ Sent.")
+    await ctx.channel.send(message)
 
-@bot.tree.command(name="embed", description="Send an embed message")
-@support_only()
-@app_commands.describe(title="Embed title", description="Embed description")
-async def embed_command(interaction: discord.Interaction, title: str, description: str):
+@bot.hybrid_command(name="embed", description="Send an embed message")
+@commands.guild_only()
+async def embed_command(ctx, title: str, *, description: str):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
+
     embed = discord.Embed(
         title=title,
         description=description,
         color=discord.Color.blurple(),
         timestamp=datetime.now(timezone.utc)
     )
-    await interaction.response.send_message("✅ Embed sent.", ephemeral=True)
-    await interaction.channel.send(embed=embed)
+    await ctx.send("✅ Embed sent.")
+    await ctx.channel.send(embed=embed)
 
-
-@bot.tree.command(name="lock", description="Lock the current channel")
-@support_only()
-async def lock(interaction: discord.Interaction):
-    if not isinstance(interaction.channel, discord.TextChannel):
-        await interaction.response.send_message("❌ This command only works in text channels.", ephemeral=True)
+@bot.hybrid_command(name="lock", description="Lock the current channel")
+@commands.guild_only()
+async def lock(ctx):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
         return
 
-    overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
+    if not isinstance(ctx.channel, discord.TextChannel):
+        await ctx.send("❌ This command only works in text channels.")
+        return
+
+    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
     overwrite.send_messages = False
-    await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+    await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
 
-    await interaction.response.send_message("🔒 Channel locked.")
+    await ctx.send("🔒 Channel locked.")
 
-
-@bot.tree.command(name="unlock", description="Unlock the current channel")
-@support_only()
-async def unlock(interaction: discord.Interaction):
-    if not isinstance(interaction.channel, discord.TextChannel):
-        await interaction.response.send_message("❌ This command only works in text channels.", ephemeral=True)
+@bot.hybrid_command(name="unlock", description="Unlock the current channel")
+@commands.guild_only()
+async def unlock(ctx):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
         return
 
-    overwrite = interaction.channel.overwrites_for(interaction.guild.default_role)
+    if not isinstance(ctx.channel, discord.TextChannel):
+        await ctx.send("❌ This command only works in text channels.")
+        return
+
+    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
     overwrite.send_messages = True
-    await interaction.channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+    await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
 
-    await interaction.response.send_message("🔓 Channel unlocked.")
+    await ctx.send("🔓 Channel unlocked.")
 
+@bot.hybrid_command(name="unlockall", description="Unlock all text channels")
+@commands.guild_only()
+async def unlockall(ctx):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
-@bot.tree.command(name="unlockall", description="Unlock all text channels")
-@support_only()
-async def unlockall(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await ctx.defer()
 
-    for channel in interaction.guild.text_channels:
-        overwrite = channel.overwrites_for(interaction.guild.default_role)
+    for channel in ctx.guild.text_channels:
+        overwrite = channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = True
-        await channel.set_permissions(interaction.guild.default_role, overwrite=overwrite)
+        await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
 
-    await interaction.followup.send("🔓 All text channels have been unlocked.")
+    await ctx.send("🔓 All text channels have been unlocked.")
 
+@bot.hybrid_command(name="purge", description="Delete messages")
+@commands.guild_only()
+async def purge(ctx, amount: int):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
-@bot.tree.command(name="purge", description="Delete messages")
-@support_only()
-@app_commands.describe(amount="How many messages to delete")
-async def purge(interaction: discord.Interaction, amount: int):
-    if not isinstance(interaction.channel, discord.TextChannel):
-        await interaction.response.send_message("❌ This command only works in text channels.", ephemeral=True)
+    if not isinstance(ctx.channel, discord.TextChannel):
+        await ctx.send("❌ This command only works in text channels.")
         return
 
     if amount < 1:
-        await interaction.response.send_message("❌ Amount must be at least 1.", ephemeral=True)
+        await ctx.send("❌ Amount must be at least 1.")
         return
 
-    await interaction.response.defer(ephemeral=True)
-    deleted = await interaction.channel.purge(limit=amount)
-    await interaction.followup.send(f"🧹 Deleted **{len(deleted)}** message(s).", ephemeral=True)
+    await ctx.defer()
+    deleted = await ctx.channel.purge(limit=amount)
+    await ctx.send(f"🧹 Deleted **{len(deleted)}** message(s).")
 
+@bot.hybrid_command(name="warn", description="Warn a user")
+@commands.guild_only()
+async def warn(ctx, user: discord.Member, *, reason: str = "No reason provided"):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
-@bot.tree.command(name="warn", description="Warn a user")
-@support_only()
-@app_commands.describe(user="The user to warn", reason="Reason for the warning")
-async def warn(interaction: discord.Interaction, user: discord.Member, reason: str = "No reason provided"):
-    count = add_warning(interaction.guild.id, user.id)
+    count = add_warning(ctx.guild.id, user.id)
 
     embed = discord.Embed(
         title="⚠️ User Warned",
@@ -1194,30 +1218,31 @@ async def warn(interaction: discord.Interaction, user: discord.Member, reason: s
         timestamp=datetime.now(timezone.utc)
     )
     embed.add_field(name="User", value=user.mention, inline=True)
-    embed.add_field(name="Moderator", value=interaction.user.mention, inline=True)
+    embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
     embed.add_field(name="Reason", value=reason, inline=False)
     embed.add_field(name="Total Warnings", value=str(count), inline=False)
 
-    await interaction.response.send_message(embed=embed)
+    await ctx.send(embed=embed)
 
+@bot.hybrid_command(name="warnings", description="Check a user's warnings")
+@commands.guild_only()
+async def warnings(ctx, user: discord.Member):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
-@bot.tree.command(name="warnings", description="Check a user's warnings")
-@support_only()
-@app_commands.describe(user="The user to check")
-async def warnings(interaction: discord.Interaction, user: discord.Member):
-    count = get_warning_count(interaction.guild.id, user.id)
-    await interaction.response.send_message(
-        f"⚠️ {user.mention} has **{count}** warning(s)."
-    )
+    count = get_warning_count(ctx.guild.id, user.id)
+    await ctx.send(f"⚠️ {user.mention} has **{count}** warning(s).")
 
+@bot.hybrid_command(name="clearwarnings", description="Clear a user's warnings")
+@commands.guild_only()
+async def clearwarnings(ctx, user: discord.Member):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
 
-@bot.tree.command(name="clearwarnings", description="Clear a user's warnings")
-@support_only()
-@app_commands.describe(user="The user to clear warnings for")
-async def clearwarnings(interaction: discord.Interaction, user: discord.Member):
-    clear_warning_count(interaction.guild.id, user.id)
-    await interaction.response.send_message(f"✅ Cleared warnings for {user.mention}.")
-
+    clear_warning_count(ctx.guild.id, user.id)
+    await ctx.send(f"✅ Cleared warnings for {user.mention}.")
 
 # =========================
 # TICKET COMMANDS
@@ -1231,7 +1256,6 @@ async def ticketpanel(interaction: discord.Interaction):
         color=discord.Color.blurple()
     )
     await interaction.response.send_message(embed=embed, view=TicketPanelView())
-
 
 @bot.tree.command(name="adduser", description="Add a user to the current ticket")
 @support_only()
@@ -1252,7 +1276,6 @@ async def adduser(interaction: discord.Interaction, user: discord.Member):
 
     await interaction.response.send_message(f"✅ Added {user.mention} to the ticket.")
 
-
 @bot.tree.command(name="removeuser", description="Remove a user from the current ticket")
 @support_only()
 @app_commands.describe(user="The user to remove")
@@ -1263,7 +1286,6 @@ async def removeuser(interaction: discord.Interaction, user: discord.Member):
 
     await interaction.channel.set_permissions(user, overwrite=None)
     await interaction.response.send_message(f"✅ Removed {user.mention} from the ticket.")
-
 
 @bot.tree.command(name="rename", description="Rename the current ticket channel")
 @support_only()
