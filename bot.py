@@ -127,6 +127,13 @@ active_reminders = {}  # optional runtime tracker
 # =========================
 # HELPERS
 # =========================
+def ensure_rep_user(user_id):
+    if user_id not in rep_data:
+        rep_data[user_id] = {
+            "rep": 0,
+            "last_given": 0
+        }
+
 def staff_only_prefix():
     async def predicate(ctx):
         return isinstance(ctx.author, discord.Member) and is_staff(ctx.author)
@@ -564,10 +571,74 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
             ephemeral=True
         )
 
+# =========================
+# REP SYSTEM
+# =========================
+@bot.command(name="rep")
+async def give_rep(ctx, member: discord.Member):
+    if member.bot:
+        await ctx.send("🤖 You can't give rep to bots.")
+        return
 
-# =========================
-# BASIC COMMANDS
-# =========================
+    if member.id == ctx.author.id:
+        await ctx.send("💀 You can't rep yourself.")
+        return
+
+    giver_id = str(ctx.author.id)
+    receiver_id = str(member.id)
+
+    ensure_rep_user(giver_id)
+    ensure_rep_user(receiver_id)
+
+    now = time.time()
+
+    if now - rep_data[giver_id]["last_given"] < REP_COOLDOWN:
+        remaining = int(REP_COOLDOWN - (now - rep_data[giver_id]["last_given"]))
+        hours = remaining // 3600
+        await ctx.send(f"⏳ You can give rep again in **{hours}h**.")
+        return
+
+    rep_data[receiver_id]["rep"] += 1
+    rep_data[giver_id]["last_given"] = now
+
+    await ctx.send(
+        f"⭐ {ctx.author.mention} gave rep to {member.mention}!\n"
+        f"🏆 They now have **{rep_data[receiver_id]['rep']} rep**."
+    )
+
+@bot.command(name="repcheck")
+async def rep_check(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    user_id = str(member.id)
+
+    ensure_rep_user(user_id)
+
+    await ctx.send(
+        f"⭐ {member.mention} has **{rep_data[user_id]['rep']} reputation**."
+    )
+
+@bot.command(name="reptop")
+async def rep_top(ctx):
+    if not rep_data:
+        await ctx.send("No rep data yet.")
+        return
+
+    sorted_users = sorted(rep_data.items(), key=lambda x: x[1]["rep"], reverse=True)
+
+    leaderboard = ""
+    for i, (user_id, data) in enumerate(sorted_users[:10], start=1):
+        user = bot.get_user(int(user_id))
+        name = user.name if user else "Unknown"
+        leaderboard += f"**{i}.** {name} — ⭐ {data['rep']}\n"
+
+    embed = discord.Embed(
+        title="🏆 Reputation Leaderboard",
+        description=leaderboard,
+        color=discord.Color.gold()
+    )
+
+    await ctx.send(embed=embed)
+
 @bot.command()
 async def test(ctx):
     await ctx.send("⚡ prefix works!")
@@ -1334,6 +1405,10 @@ async def removexp(ctx, member: discord.Member, amount: int):
     embed.add_field(name="Staff", value=ctx.author.mention, inline=True)
 
     await ctx.send(embed=embed)
+
+REP_COOLDOWN = 86400  # 24 hours
+
+rep_data = {}
 
 # =========================
 # RUN
