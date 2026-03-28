@@ -510,7 +510,7 @@ async def on_ready():
         status=discord.Status.online,
         activity=discord.Activity(
             type=discord.ActivityType.watching,
-            name="Pulse | /help"
+            name="Pulse (by prism<3) | /help"
         )
     )
 
