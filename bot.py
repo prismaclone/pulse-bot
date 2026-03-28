@@ -113,7 +113,11 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(
+    command_prefix=["p!", "!"],
+    intents=intents,
+    help_command=None
+)
 start_time = datetime.now(timezone.utc)
 
 warnings_data = {}   # {guild_id: {user_id: count}}
@@ -554,6 +558,10 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 # =========================
 # BASIC COMMANDS
 # =========================
+@bot.command()
+async def test(ctx):
+    await ctx.send("⚡ prefix works!")
+
 @bot.tree.command(name="rank", description="Check your level and XP")
 @app_commands.describe(user="The user to check")
 async def rank(interaction: discord.Interaction, user: discord.Member = None):
