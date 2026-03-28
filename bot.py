@@ -127,6 +127,11 @@ active_reminders = {}  # optional runtime tracker
 # =========================
 # HELPERS
 # =========================
+def staff_only_prefix():
+    async def predicate(ctx):
+        return isinstance(ctx.author, discord.Member) and is_staff(ctx.author)
+    return commands.check(predicate)
+
 def is_staff(member: discord.Member) -> bool:
     return any(role.name == SUPPORT_ROLE_NAME for role in member.roles)
 
@@ -422,6 +427,11 @@ class TicketControlView(discord.ui.View):
 # EVENTS
 # =========================
 @bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+
+@bot.event
 async def on_message(message):
     if message.author.bot or not message.guild:
         await bot.process_commands(message)
@@ -599,24 +609,21 @@ async def leaderboard(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="ping", description="Check if Pulse is alive")
-async def ping(interaction: discord.Interaction):
+@bot.hybrid_command(name="ping", description="Check if Pulse is alive")
+async def ping(ctx):
     latency = round(bot.latency * 1000)
-    await interaction.response.send_message(f"⚡ Pulse latency: **{latency}ms**")
+    await ctx.send(f"⚡ Pulse latency: **{latency}ms**")
 
+@bot.hybrid_command(name="hello", description="Say hello")
+async def hello(ctx):
+    await ctx.send(f"hey {ctx.author.mention} 👋")
 
-@bot.tree.command(name="hello", description="Say hello")
-async def hello(interaction: discord.Interaction):
-    await interaction.response.send_message(f"hey {interaction.user.mention} 👋")
+@bot.hybrid_command(name="uptime", description="Show how long Pulse has been online")
+async def uptime(ctx):
+    await ctx.send(f"⏳ Pulse uptime: **{format_uptime()}**")
 
-
-@bot.tree.command(name="uptime", description="Show how long Pulse has been online")
-async def uptime(interaction: discord.Interaction):
-    await interaction.response.send_message(f"⏳ Pulse uptime: **{format_uptime()}**")
-
-
-@bot.tree.command(name="botinfo", description="Show information about Pulse")
-async def botinfo(interaction: discord.Interaction):
+@bot.hybrid_command(name="botinfo", description="Show information about Pulse")
+async def botinfo(ctx):
     guild_count = len(bot.guilds)
     user_count = sum(g.member_count or 0 for g in bot.guilds)
 
@@ -630,8 +637,7 @@ async def botinfo(interaction: discord.Interaction):
     embed.add_field(name="Latency", value=f"{round(bot.latency * 1000)}ms")
     embed.add_field(name="Uptime", value=format_uptime(), inline=False)
 
-    await interaction.response.send_message(embed=embed)
-
+    await ctx.send(embed=embed)
 
 @bot.tree.command(name="help", description="Show Pulse commands")
 async def help_command(interaction: discord.Interaction):
@@ -1270,6 +1276,42 @@ async def rename(interaction: discord.Interaction, name: str):
     await interaction.channel.edit(name=name)
     await interaction.response.send_message(f"✅ Channel renamed to **{name}**.")
 
+@bot.hybrid_command(name="removexp", description="Remove XP from a user")
+@commands.guild_only()
+async def removexp(ctx, member: discord.Member, amount: int):
+    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
+        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+        return
+
+    if amount <= 0:
+        await ctx.send("❌ XP amount must be greater than 0.")
+        return
+
+    user_id = str(member.id)
+    ensure_xp_user(user_id)
+
+    old_xp = xp_data[user_id]["xp"]
+    old_level = xp_data[user_id]["level"]
+
+    xp_data[user_id]["xp"] = max(0, old_xp - amount)
+    xp_data[user_id]["level"] = get_level_from_xp(xp_data[user_id]["xp"])
+
+    new_level = xp_data[user_id]["level"]
+    save_xp(xp_data)
+
+    embed = discord.Embed(
+        title="⚠️ XP Removed",
+        color=discord.Color.orange(),
+        timestamp=datetime.now(timezone.utc)
+    )
+    embed.add_field(name="User", value=member.mention, inline=True)
+    embed.add_field(name="Removed", value=str(amount), inline=True)
+    embed.add_field(name="New XP", value=str(xp_data[user_id]["xp"]), inline=True)
+    embed.add_field(name="Old Level", value=str(old_level), inline=True)
+    embed.add_field(name="New Level", value=str(new_level), inline=True)
+    embed.add_field(name="Staff", value=ctx.author.mention, inline=True)
+
+    await ctx.send(embed=embed)
 
 # =========================
 # RUN
