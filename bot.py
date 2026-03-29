@@ -506,6 +506,14 @@ last_pressure = 0
 pressure_enabled = True
 
 @bot.event
+async def on_message(message):
+    ...
+
+@bot.event
+async def on_ready():
+    print(f"Pulse is online as {bot.user}")
+
+@bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
