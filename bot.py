@@ -508,6 +508,9 @@ pressure_enabled = True
 
 @bot.event
 async def on_ready():
+    bot.add_view(TicketPanelView())
+    bot.add_view(TicketControlView())
+
     print(f"Pulse is online as {bot.user}")
 
     guild_obj = discord.Object(id=GUILD_ID)
@@ -533,8 +536,9 @@ async def on_ready():
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-    else:
-        raise error
+        return
+
+    raise error
 
 
 @bot.event
@@ -545,12 +549,49 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
+    # =========================
+    # PRESSURE RESPONSE
+    # =========================
     if pressure_enabled and "pressure" in message.content.lower():
         now = time.time()
         if now - last_pressure > PRESSURE_COOLDOWN:
             if random.randint(1, 3) == 1:
                 await message.channel.send("YOURE UNDER THE PRESSURE!!!! 😂")
                 last_pressure = now
+
+    # =========================
+    # XP SYSTEM
+    # =========================
+    user_id = str(message.author.id)
+    ensure_xp_user(user_id)
+
+    now = time.time()
+    if now - xp_data[user_id]["last"] < XP_COOLDOWN:
+        await bot.process_commands(message)
+        return
+
+    xp_gain = random.randint(*XP_PER_MESSAGE)
+    xp_data[user_id]["xp"] += xp_gain
+    xp_data[user_id]["last"] = now
+
+    old_level = xp_data[user_id]["level"]
+    new_level = get_level_from_xp(xp_data[user_id]["xp"])
+
+    if new_level > old_level:
+        xp_data[user_id]["level"] = new_level
+
+        channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
+        if channel:
+            await channel.send(
+                f"🎉 {message.author.mention} leveled up to **Level {new_level}**!"
+            )
+
+        await apply_level_roles(message.author, old_level, new_level)
+    else:
+        xp_data[user_id]["level"] = new_level
+
+    save_json(XP_FILE, xp_data)
+    await bot.process_commands(message)
                 
 # =========================
 # REP SYSTEM
