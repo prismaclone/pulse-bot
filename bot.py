@@ -513,6 +513,20 @@ async def on_message(message):
 async def on_ready():
     print(f"Pulse is online as {bot.user}")
 
+    guild_obj = discord.Object(id=GUILD_ID)
+
+    try:
+        synced = await bot.tree.sync(guild=guild_obj)
+        print(f"Synced {len(synced)} guild command(s) to {GUILD_ID}")
+    except Exception as e:
+        print(f"Guild sync error: {e}")
+
+    try:
+        global_synced = await bot.tree.sync()
+        print(f"Synced {len(global_synced)} global command(s)")
+    except Exception as e:
+        print(f"Global sync error: {e}")
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
