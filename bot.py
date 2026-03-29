@@ -9,6 +9,7 @@ import aiohttp
 import discord
 from discord.ext import commands
 from discord import app_commands
+pressure_enabled = True 
 
 # =========================
 # CONFIG
@@ -502,7 +503,7 @@ class TicketControlView(discord.ui.View):
 # =========================
 PRESSURE_COOLDOWN = 10
 last_pressure = 0
-
+pressure_enabled = True
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -518,97 +519,7 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
-    # =========================
-    # PRESSURE RESPONSE
-    # =========================
-    if "pressure" in message.content.lower():
-        now = time.time()
-        if now - last_pressure > PRESSURE_COOLDOWN:
-            if random.randint(1, 3) == 1:
-                await message.channel.send("YOURE UNDER THE PRESSURE!!!! :laugh:")
-                last_pressure = now
-
-    user_id = str(message.author.id)
-    ensure_xp_user(user_id)
-
-    now = time.time()
-    if now - xp_data[user_id]["last"] < XP_COOLDOWN:
-        await bot.process_commands(message)
-        return
-
-    xp_gain = random.randint(*XP_PER_MESSAGE)
-    xp_data[user_id]["xp"] += xp_gain
-    xp_data[user_id]["last"] = now
-
-    old_level = xp_data[user_id]["level"]
-    new_level = get_level_from_xp(xp_data[user_id]["xp"])
-
-    if new_level > old_level:
-        xp_data[user_id]["level"] = new_level
-
-        channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-        if channel:
-            await channel.send(
-                f"🎉 {message.author.mention} leveled up to **Level {new_level}**!"
-            )
-
-        await apply_level_roles(message.author, old_level, new_level)
-    else:
-        xp_data[user_id]["level"] = new_level
-
-    save_json(XP_FILE, xp_data)
-    await bot.process_commands(message)
-
-
-@bot.event
-async def on_ready():
-    bot.add_view(TicketPanelView())
-    bot.add_view(TicketControlView())
-
-    await bot.change_presence(
-        status=discord.Status.online,
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="Pulse (by prism<3) | /help"
-        )
-    )
-
-    print(f"Pulse is online as {bot.user}")
-
-    try:
-        guild_obj = discord.Object(id=GUILD_ID)
-        synced = await bot.tree.sync(guild=guild_obj)
-        print(f"Synced {len(synced)} guild command(s) to {GUILD_ID}")
-    except Exception as e:
-        print(f"Guild sync error: {e}")
-
-    try:
-        global_synced = await bot.tree.sync()
-        print(f"Synced {len(global_synced)} global command(s)")
-    except Exception as e:
-        print(f"Global sync error: {e}")
-
-    if not hasattr(bot, "xp_task_started"):
-        bot.loop.create_task(xp_reset_task())
-        bot.xp_task_started = True
-
-
-@bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
-    if isinstance(error, app_commands.errors.CheckFailure):
-        await send_staff_only_error(interaction)
-        return
-
-    if not interaction.response.is_done():
-        await interaction.response.send_message(
-            f"❌ Something went wrong:\n`{error}`",
-            ephemeral=True
-        )
-    else:
-        await interaction.followup.send(
-            f"❌ Something went wrong:\n`{error}`",
-            ephemeral=True
-        )
+ 
 
 # =========================
 # REP SYSTEM
@@ -1200,6 +1111,31 @@ async def remind(ctx, time: str, *, reminder: str):
 # =========================
 # STAFF COMMANDS
 # =========================
+@bot.command(name="pressure")
+@commands.has_role(SUPPORT_ROLE_NAME)
+async def pressure_toggle(ctx, mode: str = None):
+    global pressure_enabled
+
+    if mode is None:
+        status = "ON" if pressure_enabled else "OFF"
+        await ctx.send(f"⚡ Pressure response is currently **{status}**.")
+        return
+
+    mode = mode.lower()
+
+    if mode in ["on", "enable"]:
+        pressure_enabled = True
+        await ctx.send("🟢 Pressure responses enabled.")
+    elif mode in ["off", "disable"]:
+        pressure_enabled = False
+        await ctx.send("🔴 Pressure responses disabled.")
+    elif mode == "toggle":
+        pressure_enabled = not pressure_enabled
+        status = "enabled" if pressure_enabled else "disabled"
+        await ctx.send(f"⚡ Pressure responses {status}.")
+    else:
+        await ctx.send("❌ Use `on`, `off`, or `toggle`.")
+    
 @bot.hybrid_command(name="xpreset", description="Reset all XP and remove level roles")
 @commands.guild_only()
 async def xpreset(ctx):
