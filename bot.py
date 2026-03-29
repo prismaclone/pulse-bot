@@ -500,6 +500,10 @@ class TicketControlView(discord.ui.View):
 # =========================
 # EVENTS
 # =========================
+PRESSURE_COOLDOWN = 10
+last_pressure = 0
+
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
@@ -508,9 +512,21 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_message(message):
+    global last_pressure
+
     if message.author.bot or not message.guild:
         await bot.process_commands(message)
         return
+
+    # =========================
+    # PRESSURE RESPONSE
+    # =========================
+    if "pressure" in message.content.lower():
+        now = time.time()
+        if now - last_pressure > PRESSURE_COOLDOWN:
+            if random.randint(1, 3) == 1:
+                await message.channel.send("YOURE UNDER THE PRESSURE!!!! :laugh:")
+                last_pressure = now
 
     user_id = str(message.author.id)
     ensure_xp_user(user_id)
