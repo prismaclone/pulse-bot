@@ -1111,30 +1111,49 @@ async def remind(ctx, time: str, *, reminder: str):
 # =========================
 # STAFF COMMANDS
 # =========================
-@bot.command(name="pressure")
-@commands.has_role(SUPPORT_ROLE_NAME)
-async def pressure_toggle(ctx, mode: str = None):
+@bot.tree.command(name="pressure", description="Control the pressure response feature")
+@app_commands.describe(mode="on, off, or toggle")
+async def pressure_slash(interaction: discord.Interaction, mode: str = None):
     global pressure_enabled
 
+    # 🔒 Role check
+    role = discord.utils.get(interaction.user.roles, name=SUPPORT_ROLE_NAME)
+    if role is None:
+        await interaction.response.send_message(
+            f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this.",
+            ephemeral=True
+        )
+        return
+
+    # 📊 No argument → show status
     if mode is None:
         status = "ON" if pressure_enabled else "OFF"
-        await ctx.send(f"⚡ Pressure response is currently **{status}**.")
+        await interaction.response.send_message(
+            f"⚡ Pressure response is currently **{status}**.",
+            ephemeral=True
+        )
         return
 
     mode = mode.lower()
 
+    # 🔘 Handle modes
     if mode in ["on", "enable"]:
         pressure_enabled = True
-        await ctx.send("🟢 Pressure responses enabled.")
+        msg = "🟢 Pressure responses enabled."
     elif mode in ["off", "disable"]:
         pressure_enabled = False
-        await ctx.send("🔴 Pressure responses disabled.")
+        msg = "🔴 Pressure responses disabled."
     elif mode == "toggle":
         pressure_enabled = not pressure_enabled
-        status = "enabled" if pressure_enabled else "disabled"
-        await ctx.send(f"⚡ Pressure responses {status}.")
+        msg = f"⚡ Pressure responses {'enabled' if pressure_enabled else 'disabled'}."
     else:
-        await ctx.send("❌ Use `on`, `off`, or `toggle`.")
+        await interaction.response.send_message(
+            "❌ Use `on`, `off`, or `toggle`.",
+            ephemeral=True
+        )
+        return
+
+    await interaction.response.send_message(msg)
     
 @bot.hybrid_command(name="xpreset", description="Reset all XP and remove level roles")
 @commands.guild_only()
