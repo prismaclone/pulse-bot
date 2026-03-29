@@ -505,9 +505,6 @@ PRESSURE_COOLDOWN = 10
 last_pressure = 0
 pressure_enabled = True
 
-@bot.event
-async def on_message(message):
-    ...
 
 @bot.event
 async def on_ready():
@@ -527,10 +524,17 @@ async def on_ready():
     except Exception as e:
         print(f"Global sync error: {e}")
 
+    if not hasattr(bot, "xp_task_started"):
+        bot.loop.create_task(xp_reset_task())
+        bot.xp_task_started = True
+
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+    else:
+        raise error
 
 
 @bot.event
@@ -541,8 +545,13 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
- 
-
+    if pressure_enabled and "pressure" in message.content.lower():
+        now = time.time()
+        if now - last_pressure > PRESSURE_COOLDOWN:
+            if random.randint(1, 3) == 1:
+                await message.channel.send("YOURE UNDER THE PRESSURE!!!! 😂")
+                last_pressure = now
+                
 # =========================
 # REP SYSTEM
 # =========================
