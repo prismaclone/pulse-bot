@@ -667,6 +667,273 @@ async def rep_top(ctx):
 # =========================
 # BASIC / PROFILE COMMANDS
 # =========================
+import os
+import time
+import math
+import psutil
+import aiohttp
+import platform
+import discord
+from datetime import datetime, timezone
+from discord import app_commands
+
+# Make sure this exists near the top of your file
+start_time = datetime.now(timezone.utc)
+
+def format_duration(seconds: float) -> str:
+    seconds = int(seconds)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+def format_bytes(num: int) -> str:
+    step_unit = 1024
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if num < step_unit:
+            return f"{num:.2f} {unit}" if unit != "B" else f"{num} {unit}"
+        num /= step_unit
+    return f"{num:.2f} PB"
+
+def health_emoji(value: float, warn: float, bad: float) -> str:
+    if value >= bad:
+        return "🔴"
+    if value >= warn:
+        return "🟠"
+    return "🟢"
+
+def safe_count_channels(guilds):
+    text_channels = 0
+    voice_channels = 0
+    categories = 0
+    forums = 0
+    stages = 0
+
+    for guild in guilds:
+        for channel in guild.channels:
+            if isinstance(channel, discord.TextChannel):
+                text_channels += 1
+            elif isinstance(channel, discord.VoiceChannel):
+                voice_channels += 1
+            elif isinstance(channel, discord.CategoryChannel):
+                categories += 1
+            elif isinstance(channel, discord.ForumChannel):
+                forums += 1
+            elif isinstance(channel, discord.StageChannel):
+                stages += 1
+
+    return text_channels, voice_channels, categories, forums, stages
+
+@bot.tree.command(name="diagnose", description="Extremely advanced diagnostics for Pulse")
+async def diagnose(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=True)
+
+    now = datetime.now(timezone.utc)
+    uptime_seconds = (now - start_time).total_seconds()
+
+    process = psutil.Process(os.getpid())
+
+    # Prime CPU percent so the next reading is more accurate
+    psutil.cpu_percent(interval=None)
+    await discord.utils.sleep_until(datetime.now(timezone.utc))
+    cpu_percent = psutil.cpu_percent(interval=0.3)
+
+    virtual_mem = psutil.virtual_memory()
+    disk_usage = psutil.disk_usage("/")
+    swap_mem = psutil.swap_memory()
+
+    process_mem = process.memory_info()
+    process_cpu = process.cpu_percent(interval=0.1)
+    process_threads = process.num_threads()
+    process_created = datetime.fromtimestamp(process.create_time(), tz=timezone.utc)
+
+    bot_latency_ms = round(bot.latency * 1000)
+
+    # REST/API latency test
+    api_latency_ms = None
+    api_status = "Unknown"
+    try:
+        api_start = time.perf_counter()
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://discord.com/api/v10/gateway", timeout=5) as resp:
+                api_latency_ms = round((time.perf_counter() - api_start) * 1000)
+                api_status = f"{resp.status}"
+    except Exception as e:
+        api_status = f"Error: {type(e).__name__}"
+
+    guild_count = len(bot.guilds)
+    user_count = sum((g.member_count or 0) for g in bot.guilds)
+
+    text_channels, voice_channels, categories, forums, stages = safe_count_channels(bot.guilds)
+
+    slash_count = len(bot.tree.get_commands())
+    prefix_count = len(bot.commands)
+    cogs_count = len(bot.cogs)
+
+    shard_count = bot.shard_count or 1
+    shard_id = interaction.guild.shard_id if interaction.guild else 0
+
+    python_version = platform.python_version()
+    discord_version = discord.__version__
+    system_name = platform.system()
+    system_release = platform.release()
+    machine = platform.machine()
+    processor = platform.processor() or "Unknown"
+
+    boot_time = datetime.fromtimestamp(psutil.boot_time(), tz=timezone.utc)
+    system_uptime = (now - boot_time).total_seconds()
+
+    warnings = []
+
+    cpu_flag = health_emoji(cpu_percent, 65, 85)
+    ram_flag = health_emoji(virtual_mem.percent, 70, 90)
+    disk_flag = health_emoji(disk_usage.percent, 80, 92)
+    proc_ram_mb = process_mem.rss / 1024 / 1024
+
+    if cpu_percent >= 85:
+        warnings.append("High system CPU usage detected.")
+    if virtual_mem.percent >= 90:
+        warnings.append("Very high system RAM usage detected.")
+    if disk_usage.percent >= 92:
+        warnings.append("Disk space is critically high.")
+    if bot_latency_ms >= 250:
+        warnings.append("Gateway latency is elevated.")
+    if api_latency_ms is not None and api_latency_ms >= 500:
+        warnings.append("Discord REST/API latency is elevated.")
+    if process_cpu >= 50:
+        warnings.append("Pulse process CPU usage is unusually high.")
+    if proc_ram_mb >= 700:
+        warnings.append("Pulse process memory usage is high.")
+
+    if not warnings:
+        overall_status = "🟢 Stable"
+        color = discord.Color.green()
+    elif len(warnings) <= 2:
+        overall_status = "🟠 Warning"
+        color = discord.Color.orange()
+    else:
+        overall_status = "🔴 Critical"
+        color = discord.Color.red()
+
+    embed = discord.Embed(
+        title="⚡ Pulse Deep Diagnostics",
+        description=(
+            f"**Overall Status:** {overall_status}\n"
+            f"**Checked:** <t:{int(now.timestamp())}:R>"
+        ),
+        color=color,
+        timestamp=now
+    )
+
+    embed.add_field(
+        name="🌐 Connection",
+        value=(
+            f"**Gateway Ping:** `{bot_latency_ms} ms`\n"
+            f"**API Ping:** `{api_latency_ms if api_latency_ms is not None else 'N/A'} ms`\n"
+            f"**API Status:** `{api_status}`\n"
+            f"**Shard:** `{shard_id}/{shard_count - 1 if shard_count > 0 else 0}`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⏱️ Runtime",
+        value=(
+            f"**Bot Uptime:** `{format_duration(uptime_seconds)}`\n"
+            f"**System Uptime:** `{format_duration(system_uptime)}`\n"
+            f"**Process Started:** <t:{int(process_created.timestamp())}:R>\n"
+            f"**System Boot:** <t:{int(boot_time.timestamp())}:R>"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="🖥️ System Health",
+        value=(
+            f"{cpu_flag} **CPU:** `{cpu_percent}%`\n"
+            f"{ram_flag} **RAM:** `{virtual_mem.percent}%` "
+            f"(`{format_bytes(virtual_mem.used)}` / `{format_bytes(virtual_mem.total)}`)\n"
+            f"{disk_flag} **Disk:** `{disk_usage.percent}%` "
+            f"(`{format_bytes(disk_usage.used)}` / `{format_bytes(disk_usage.total)}`)\n"
+            f"🟣 **Swap:** `{swap_mem.percent}%` "
+            f"(`{format_bytes(swap_mem.used)}` / `{format_bytes(swap_mem.total)}`)"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="🤖 Pulse Process",
+        value=(
+            f"**Process CPU:** `{process_cpu:.1f}%`\n"
+            f"**Process RAM:** `{proc_ram_mb:.2f} MB`\n"
+            f"**Threads:** `{process_threads}`\n"
+            f"**PID:** `{process.pid}`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📦 Environment",
+        value=(
+            f"**OS:** `{system_name} {system_release}`\n"
+            f"**Architecture:** `{machine}`\n"
+            f"**Processor:** `{processor[:80]}`\n"
+            f"**Python:** `{python_version}`\n"
+            f"**discord.py:** `{discord_version}`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="📊 Discord Stats",
+        value=(
+            f"**Servers:** `{guild_count}`\n"
+            f"**Users:** `{user_count}`\n"
+            f"**Text Channels:** `{text_channels}`\n"
+            f"**Voice Channels:** `{voice_channels}`\n"
+            f"**Categories:** `{categories}`\n"
+            f"**Forums:** `{forums}`\n"
+            f"**Stage Channels:** `{stages}`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="⚙️ Command System",
+        value=(
+            f"**Slash Commands:** `{slash_count}`\n"
+            f"**Prefix Commands:** `{prefix_count}`\n"
+            f"**Cogs Loaded:** `{cogs_count}`\n"
+            f"**Latency Class:** "
+            f"`{'Excellent' if bot_latency_ms < 100 else 'Good' if bot_latency_ms < 180 else 'Fair' if bot_latency_ms < 250 else 'Poor'}`"
+        ),
+        inline=False
+    )
+
+    if warnings:
+        warning_text = "\n".join(f"• {w}" for w in warnings[:8])
+    else:
+        warning_text = "• No active issues detected."
+
+    embed.add_field(
+        name="🚨 Alerts",
+        value=warning_text,
+        inline=False
+    )
+
+    embed.set_footer(text="Pulse Advanced Diagnostic Engine • Internal health sweep complete")
+
+    await interaction.followup.send(embed=embed)
+
 @bot.command()
 async def test(ctx):
     await ctx.send("⚡ prefix works!")
