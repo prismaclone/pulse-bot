@@ -669,16 +669,16 @@ async def rep_top(ctx):
 # =========================
 import os
 import time
-import math
 import psutil
 import aiohttp
 import platform
 import discord
 from datetime import datetime, timezone
-from discord import app_commands
+from discord.ext import commands
 
-# Make sure this exists near the top of your file
+# Put this near the top of your bot file if you do not already have it
 start_time = datetime.now(timezone.utc)
+
 
 def format_duration(seconds: float) -> str:
     seconds = int(seconds)
@@ -696,6 +696,7 @@ def format_duration(seconds: float) -> str:
     parts.append(f"{seconds}s")
     return " ".join(parts)
 
+
 def format_bytes(num: int) -> str:
     step_unit = 1024
     for unit in ["B", "KB", "MB", "GB", "TB"]:
@@ -704,12 +705,14 @@ def format_bytes(num: int) -> str:
         num /= step_unit
     return f"{num:.2f} PB"
 
+
 def health_emoji(value: float, warn: float, bad: float) -> str:
     if value >= bad:
         return "🔴"
     if value >= warn:
         return "🟠"
     return "🟢"
+
 
 def safe_count_channels(guilds):
     text_channels = 0
@@ -733,22 +736,29 @@ def safe_count_channels(guilds):
 
     return text_channels, voice_channels, categories, forums, stages
 
-@bot.tree.command(name="diagnose", description="Extremely advanced diagnostics for Pulse")
-async def diagnose(interaction: discord.Interaction):
-    await interaction.response.defer(thinking=True)
+
+@bot.hybrid_command(name="diagnose", description="Extremely advanced diagnostics for Pulse")
+async def diagnose(ctx: commands.Context):
+    try:
+        await ctx.defer()
+    except Exception:
+        pass
 
     now = datetime.now(timezone.utc)
     uptime_seconds = (now - start_time).total_seconds()
 
     process = psutil.Process(os.getpid())
 
-    # Prime CPU percent so the next reading is more accurate
+    # Prime CPU reading for a more accurate result
     psutil.cpu_percent(interval=None)
-    await discord.utils.sleep_until(datetime.now(timezone.utc))
     cpu_percent = psutil.cpu_percent(interval=0.3)
 
     virtual_mem = psutil.virtual_memory()
-    disk_usage = psutil.disk_usage("/")
+
+    # Railway / Linux-safe disk path
+    disk_path = "C:\\" if os.name == "nt" else "/"
+    disk_usage = psutil.disk_usage(disk_path)
+
     swap_mem = psutil.swap_memory()
 
     process_mem = process.memory_info()
@@ -758,7 +768,7 @@ async def diagnose(interaction: discord.Interaction):
 
     bot_latency_ms = round(bot.latency * 1000)
 
-    # REST/API latency test
+    # Discord REST/API latency test
     api_latency_ms = None
     api_status = "Unknown"
     try:
@@ -766,7 +776,7 @@ async def diagnose(interaction: discord.Interaction):
         async with aiohttp.ClientSession() as session:
             async with session.get("https://discord.com/api/v10/gateway", timeout=5) as resp:
                 api_latency_ms = round((time.perf_counter() - api_start) * 1000)
-                api_status = f"{resp.status}"
+                api_status = str(resp.status)
     except Exception as e:
         api_status = f"Error: {type(e).__name__}"
 
@@ -780,7 +790,7 @@ async def diagnose(interaction: discord.Interaction):
     cogs_count = len(bot.cogs)
 
     shard_count = bot.shard_count or 1
-    shard_id = interaction.guild.shard_id if interaction.guild else 0
+    shard_id = ctx.guild.shard_id if ctx.guild else 0
 
     python_version = platform.python_version()
     discord_version = discord.__version__
@@ -797,6 +807,7 @@ async def diagnose(interaction: discord.Interaction):
     cpu_flag = health_emoji(cpu_percent, 65, 85)
     ram_flag = health_emoji(virtual_mem.percent, 70, 90)
     disk_flag = health_emoji(disk_usage.percent, 80, 92)
+
     proc_ram_mb = process_mem.rss / 1024 / 1024
 
     if cpu_percent >= 85:
@@ -824,6 +835,13 @@ async def diagnose(interaction: discord.Interaction):
         overall_status = "🔴 Critical"
         color = discord.Color.red()
 
+    latency_class = (
+        "Excellent" if bot_latency_ms < 100
+        else "Good" if bot_latency_ms < 180
+        else "Fair" if bot_latency_ms < 250
+        else "Poor"
+    )
+
     embed = discord.Embed(
         title="⚡ Pulse Deep Diagnostics",
         description=(
@@ -840,7 +858,7 @@ async def diagnose(interaction: discord.Interaction):
             f"**Gateway Ping:** `{bot_latency_ms} ms`\n"
             f"**API Ping:** `{api_latency_ms if api_latency_ms is not None else 'N/A'} ms`\n"
             f"**API Status:** `{api_status}`\n"
-            f"**Shard:** `{shard_id}/{shard_count - 1 if shard_count > 0 else 0}`"
+            f"**Shard:** `{shard_id}/{max(shard_count - 1, 0)}`"
         ),
         inline=False
     )
@@ -913,14 +931,13 @@ async def diagnose(interaction: discord.Interaction):
             f"**Slash Commands:** `{slash_count}`\n"
             f"**Prefix Commands:** `{prefix_count}`\n"
             f"**Cogs Loaded:** `{cogs_count}`\n"
-            f"**Latency Class:** "
-            f"`{'Excellent' if bot_latency_ms < 100 else 'Good' if bot_latency_ms < 180 else 'Fair' if bot_latency_ms < 250 else 'Poor'}`"
+            f"**Latency Class:** `{latency_class}`"
         ),
         inline=False
     )
 
     if warnings:
-        warning_text = "\n".join(f"• {w}" for w in warnings[:8])
+        warning_text = "\n".join(f"• {warning}" for warning in warnings[:8])
     else:
         warning_text = "• No active issues detected."
 
@@ -932,7 +949,7 @@ async def diagnose(interaction: discord.Interaction):
 
     embed.set_footer(text="Pulse Advanced Diagnostic Engine • Internal health sweep complete")
 
-    await interaction.followup.send(embed=embed)
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def test(ctx):
