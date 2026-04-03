@@ -1,15 +1,20 @@
 import os
 import io
+import ast
 import json
 import time
+import math
 import random
+import shutil
 import asyncio
+import platform
 from datetime import datetime, timezone, timedelta
+
 import aiohttp
+import psutil
 import discord
 from discord.ext import commands
 from discord import app_commands
-pressure_enabled = True 
 
 # =========================
 # CONFIG
@@ -32,7 +37,7 @@ XP_COOLDOWN = 15
 REP_COOLDOWN = 86400  # 24 hours
 
 LEVEL_UP_CHANNEL_ID = 1403833600469762058
-XP_RESET_INTERVAL = "monthly"  # "daily", "weekly", "monthly", or None
+XP_RESET_INTERVAL = "monthly"  # keep monthly scheduled resets
 
 LEVEL_ROLES = {
     1: 1404861873496784977,
@@ -42,27 +47,9 @@ LEVEL_ROLES = {
     25: 1404864535491248239,
 }
 
-# =========================
-# JSON HELPERS
-# =========================
-def load_json(filename: str) -> dict:
-    if os.path.exists(filename):
-        try:
-            with open(filename, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, OSError):
-            return {}
-    return {}
-
-
-def save_json(filename: str, data: dict) -> None:
-    with open(filename, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
-
-
-xp_data = load_json(XP_FILE)
-rep_data = load_json(REP_FILE)
-warnings_data = load_json(WARNINGS_FILE)
+PRESSURE_COOLDOWN = 10
+last_pressure = 0
+pressure_enabled = True
 
 # =========================
 # INTENTS / BOT SETUP
@@ -80,51 +67,240 @@ bot = commands.Bot(
 start_time = datetime.now(timezone.utc)
 
 # =========================
+# SAFE JSON HELPERS
+# =========================
+def _backup_name(filename: str, suffix: str) -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    return f"{filename}.{suffix}.{timestamp}.bak"
+
+
+def load_json(filename: str, expected_type=dict):
+    if not os.path.exists(filename):
+        return expected_type()
+
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, expected_type):
+            print(f"[WARN] {filename} is not a {expected_type.__name__}; using empty default.")
+            return expected_type()
+
+        return data
+
+    except json.JSONDecodeError as e:
+        print(f"[ERROR] JSON corrupted in {filename}: {e}")
+
+        # Backup corrupted file
+        try:
+            corrupt_backup = _backup_name(filename, "corrupt")
+            shutil.copy(filename, corrupt_backup)
+            print(f"[INFO] Corrupted file backed up to {corrupt_backup}")
+        except Exception as backup_error:
+            print(f"[WARN] Failed to back up corrupted file {filename}: {backup_error}")
+
+        # Try .bak fallback
+        bak_file = f"{filename}.bak"
+        if os.path.exists(bak_file):
+            try:
+                with open(bak_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, expected_type):
+                    print(f"[INFO] Loaded backup data from {bak_file}")
+                    return data
+            except Exception as bak_error:
+                print(f"[WARN] Backup file {bak_file} also failed: {bak_error}")
+
+        return expected_type()
+
+    except Exception as e:
+        print(f"[ERROR] Failed to load {filename}: {e}")
+        return expected_type()
+
+
+def save_json(filename: str, data) -> bool:
+    temp_file = f"{filename}.tmp"
+    bak_file = f"{filename}.bak"
+
+    try:
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+
+        if os.path.exists(filename):
+            try:
+                shutil.copy(filename, bak_file)
+            except Exception as backup_error:
+                print(f"[WARN] Could not update backup for {filename}: {backup_error}")
+
+        os.replace(temp_file, filename)
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] Failed to save {filename}: {e}")
+        try:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+        except Exception:
+            pass
+        return False
+
+
+xp_data = load_json(XP_FILE)
+rep_data = load_json(REP_FILE)
+warnings_data = load_json(WARNINGS_FILE)
+
+# =========================
+# DATA SANITIZERS
+# =========================
+def sanitize_xp_data():
+    global xp_data
+    cleaned = {}
+
+    for user_id, info in xp_data.items():
+        if not isinstance(info, dict):
+            continue
+
+        try:
+            cleaned[str(user_id)] = {
+                "xp": max(0, int(info.get("xp", 0))),
+                "level": max(0, int(info.get("level", 0))),
+                "last": float(info.get("last", 0)),
+            }
+        except (TypeError, ValueError):
+            cleaned[str(user_id)] = {
+                "xp": 0,
+                "level": 0,
+                "last": 0.0,
+            }
+
+    xp_data = cleaned
+
+
+def sanitize_rep_data():
+    global rep_data
+    cleaned = {}
+
+    for user_id, info in rep_data.items():
+        if not isinstance(info, dict):
+            continue
+
+        try:
+            cleaned[str(user_id)] = {
+                "rep": int(info.get("rep", 0)),
+                "last_given": float(info.get("last_given", 0)),
+            }
+        except (TypeError, ValueError):
+            cleaned[str(user_id)] = {
+                "rep": 0,
+                "last_given": 0.0,
+            }
+
+    rep_data = cleaned
+
+
+def sanitize_warnings_data():
+    global warnings_data
+    cleaned = {}
+
+    for guild_id, users in warnings_data.items():
+        if not isinstance(users, dict):
+            continue
+
+        cleaned_users = {}
+        for user_id, count in users.items():
+            try:
+                cleaned_users[str(user_id)] = max(0, int(count))
+            except (TypeError, ValueError):
+                cleaned_users[str(user_id)] = 0
+
+        cleaned[str(guild_id)] = cleaned_users
+
+    warnings_data = cleaned
+
+
+sanitize_xp_data()
+sanitize_rep_data()
+sanitize_warnings_data()
+
+save_json(XP_FILE, xp_data)
+save_json(REP_FILE, rep_data)
+save_json(WARNINGS_FILE, warnings_data)
+
+# =========================
 # DATA HELPERS
 # =========================
 def ensure_xp_user(user_id: str):
-    if user_id not in xp_data:
+    user_id = str(user_id)
+
+    if user_id not in xp_data or not isinstance(xp_data[user_id], dict):
         xp_data[user_id] = {
             "xp": 0,
             "level": 0,
-            "last": 0
+            "last": 0.0
         }
-        save_json(XP_FILE, xp_data)
-    else:
-        xp_data[user_id].setdefault("xp", 0)
-        xp_data[user_id].setdefault("level", 0)
-        xp_data[user_id].setdefault("last", 0)
+
+    xp_data[user_id].setdefault("xp", 0)
+    xp_data[user_id].setdefault("level", 0)
+    xp_data[user_id].setdefault("last", 0.0)
+
+    try:
+        xp_data[user_id]["xp"] = max(0, int(xp_data[user_id]["xp"]))
+    except (TypeError, ValueError):
+        xp_data[user_id]["xp"] = 0
+
+    try:
+        xp_data[user_id]["level"] = max(0, int(xp_data[user_id]["level"]))
+    except (TypeError, ValueError):
+        xp_data[user_id]["level"] = 0
+
+    try:
+        xp_data[user_id]["last"] = float(xp_data[user_id]["last"])
+    except (TypeError, ValueError):
+        xp_data[user_id]["last"] = 0.0
 
 
 def ensure_rep_user(user_id: str):
-    if user_id not in rep_data:
+    user_id = str(user_id)
+
+    if user_id not in rep_data or not isinstance(rep_data[user_id], dict):
         rep_data[user_id] = {
             "rep": 0,
-            "last_given": 0
+            "last_given": 0.0
         }
-        save_json(REP_FILE, rep_data)
-    else:
-        rep_data[user_id].setdefault("rep", 0)
-        rep_data[user_id].setdefault("last_given", 0)
+
+    rep_data[user_id].setdefault("rep", 0)
+    rep_data[user_id].setdefault("last_given", 0.0)
+
+    try:
+        rep_data[user_id]["rep"] = int(rep_data[user_id]["rep"])
+    except (TypeError, ValueError):
+        rep_data[user_id]["rep"] = 0
+
+    try:
+        rep_data[user_id]["last_given"] = float(rep_data[user_id]["last_given"])
+    except (TypeError, ValueError):
+        rep_data[user_id]["last_given"] = 0.0
 
 
 def ensure_warning_bucket(guild_id: int):
     guild_key = str(guild_id)
-    if guild_key not in warnings_data:
+    if guild_key not in warnings_data or not isinstance(warnings_data[guild_key], dict):
         warnings_data[guild_key] = {}
-        save_json(WARNINGS_FILE, warnings_data)
     return guild_key
 
 
 def get_warning_count(guild_id: int, user_id: int) -> int:
     guild_key = ensure_warning_bucket(guild_id)
-    return warnings_data[guild_key].get(str(user_id), 0)
+    try:
+        return int(warnings_data[guild_key].get(str(user_id), 0))
+    except (TypeError, ValueError):
+        return 0
 
 
 def add_warning(guild_id: int, user_id: int) -> int:
     guild_key = ensure_warning_bucket(guild_id)
     user_key = str(user_id)
-    warnings_data[guild_key][user_key] = warnings_data[guild_key].get(user_key, 0) + 1
+    warnings_data[guild_key][user_key] = get_warning_count(guild_id, user_id) + 1
     save_json(WARNINGS_FILE, warnings_data)
     return warnings_data[guild_key][user_key]
 
@@ -159,6 +335,8 @@ async def apply_level_roles(member: discord.Member, old_level: int, new_level: i
                     await member.add_roles(role, reason="Level reward")
                 except discord.Forbidden:
                     pass
+                except Exception as e:
+                    print(f"[WARN] Failed to add level role {role_id} to {member}: {e}")
 
 
 async def remove_all_level_roles():
@@ -174,9 +352,9 @@ async def remove_all_level_roles():
                 try:
                     await member.remove_roles(*roles_to_remove, reason="XP reset")
                 except discord.Forbidden:
-                    print(f"Couldn't remove XP roles from {member} in {guild.name}")
+                    print(f"[WARN] Couldn't remove XP roles from {member} in {guild.name}")
                 except Exception as e:
-                    print(f"Error removing XP roles from {member}: {e}")
+                    print(f"[WARN] Error removing XP roles from {member}: {e}")
 
 
 async def xp_reset_task():
@@ -192,15 +370,17 @@ async def xp_reset_task():
         elif XP_RESET_INTERVAL == "monthly":
             next_run = now + timedelta(days=30)
         else:
+            print("[INFO] XP resets are disabled.")
             return
 
-        await asyncio.sleep((next_run - now).total_seconds())
+        wait_seconds = max(1, (next_run - now).total_seconds())
+        await asyncio.sleep(wait_seconds)
 
         await remove_all_level_roles()
         xp_data.clear()
         save_json(XP_FILE, xp_data)
 
-        print("XP reset completed.")
+        print("[INFO] XP reset completed.")
 
 # =========================
 # GENERAL HELPERS
@@ -227,6 +407,63 @@ def format_uptime() -> str:
     parts.append(f"{seconds}s")
 
     return " ".join(parts)
+
+
+def format_duration(seconds: float) -> str:
+    seconds = int(seconds)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+
+def format_bytes(num: int) -> str:
+    step_unit = 1024
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if num < step_unit:
+            return f"{num:.2f} {unit}" if unit != "B" else f"{num} {unit}"
+        num /= step_unit
+    return f"{num:.2f} PB"
+
+
+def health_emoji(value: float, warn: float, bad: float) -> str:
+    if value >= bad:
+        return "🔴"
+    if value >= warn:
+        return "🟠"
+    return "🟢"
+
+
+def safe_count_channels(guilds):
+    text_channels = 0
+    voice_channels = 0
+    categories = 0
+    forums = 0
+    stages = 0
+
+    for guild in guilds:
+        for channel in guild.channels:
+            if isinstance(channel, discord.TextChannel):
+                text_channels += 1
+            elif isinstance(channel, discord.VoiceChannel):
+                voice_channels += 1
+            elif isinstance(channel, discord.CategoryChannel):
+                categories += 1
+            elif isinstance(channel, discord.ForumChannel):
+                forums += 1
+            elif isinstance(channel, discord.StageChannel):
+                stages += 1
+
+    return text_channels, voice_channels, categories, forums, stages
 
 
 def parse_duration(duration: str) -> int | None:
@@ -291,6 +528,33 @@ async def create_transcript(channel: discord.TextChannel) -> str:
         return "No messages found in this ticket."
 
     return "\n".join(messages)
+
+
+def safe_eval_expression(expression: str):
+    allowed_names = {
+        "abs": abs,
+        "round": round,
+        "min": min,
+        "max": max,
+        "pow": pow,
+        "sum": sum,
+        "pi": math.pi,
+        "e": math.e,
+    }
+
+    node = ast.parse(expression, mode="eval")
+
+    for subnode in ast.walk(node):
+        if isinstance(subnode, ast.Name):
+            if subnode.id not in allowed_names:
+                raise ValueError("Disallowed name used.")
+        elif isinstance(subnode, ast.Call):
+            if not isinstance(subnode.func, ast.Name) or subnode.func.id not in allowed_names:
+                raise ValueError("Disallowed function call.")
+        elif isinstance(subnode, (ast.Import, ast.ImportFrom, ast.Attribute, ast.Subscript, ast.Lambda)):
+            raise ValueError("Unsafe expression.")
+
+    return eval(compile(node, "<string>", "eval"), {"__builtins__": {}}, allowed_names)
 
 # =========================
 # TICKET VIEWS
@@ -501,11 +765,6 @@ class TicketControlView(discord.ui.View):
 # =========================
 # EVENTS
 # =========================
-PRESSURE_COOLDOWN = 10
-last_pressure = 0
-pressure_enabled = True
-
-
 @bot.event
 async def on_ready():
     bot.add_view(TicketPanelView())
@@ -549,9 +808,7 @@ async def on_message(message):
         await bot.process_commands(message)
         return
 
-    # =========================
-    # PRESSURE RESPONSE
-    # =========================
+    # pressure response
     if pressure_enabled and "pressure" in message.content.lower():
         now = time.time()
         if now - last_pressure > PRESSURE_COOLDOWN:
@@ -559,9 +816,7 @@ async def on_message(message):
                 await message.channel.send("YOURE UNDER THE PRESSURE!!!! 😂")
                 last_pressure = now
 
-    # =========================
-    # XP SYSTEM
-    # =========================
+    # xp system
     user_id = str(message.author.id)
     ensure_xp_user(user_id)
 
@@ -576,23 +831,23 @@ async def on_message(message):
 
     old_level = xp_data[user_id]["level"]
     new_level = get_level_from_xp(xp_data[user_id]["xp"])
+    xp_data[user_id]["level"] = new_level
 
     if new_level > old_level:
-        xp_data[user_id]["level"] = new_level
-
         channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
         if channel:
-            await channel.send(
-                f"🎉 {message.author.mention} leveled up to **Level {new_level}**!"
-            )
+            try:
+                await channel.send(
+                    f"🎉 {message.author.mention} leveled up to **Level {new_level}**!"
+                )
+            except Exception as e:
+                print(f"[WARN] Failed sending level-up message: {e}")
 
         await apply_level_roles(message.author, old_level, new_level)
-    else:
-        xp_data[user_id]["level"] = new_level
 
     save_json(XP_FILE, xp_data)
     await bot.process_commands(message)
-                
+
 # =========================
 # REP SYSTEM
 # =========================
@@ -638,9 +893,7 @@ async def rep_check(ctx, member: discord.Member = None):
 
     ensure_rep_user(user_id)
 
-    await ctx.send(
-        f"⭐ {member.mention} has **{rep_data[user_id]['rep']} reputation**."
-    )
+    await ctx.send(f"⭐ {member.mention} has **{rep_data[user_id]['rep']} reputation**.")
 
 
 @bot.command(name="reptop")
@@ -665,78 +918,8 @@ async def rep_top(ctx):
     await ctx.send(embed=embed)
 
 # =========================
-# BASIC / PROFILE COMMANDS
+# DIAGNOSTICS / PROFILE / CORE
 # =========================
-import os
-import time
-import psutil
-import aiohttp
-import platform
-import discord
-from datetime import datetime, timezone
-from discord.ext import commands
-
-# Put this near the top of your bot file if you do not already have it
-start_time = datetime.now(timezone.utc)
-
-
-def format_duration(seconds: float) -> str:
-    seconds = int(seconds)
-    days, seconds = divmod(seconds, 86400)
-    hours, seconds = divmod(seconds, 3600)
-    minutes, seconds = divmod(seconds, 60)
-
-    parts = []
-    if days:
-        parts.append(f"{days}d")
-    if hours:
-        parts.append(f"{hours}h")
-    if minutes:
-        parts.append(f"{minutes}m")
-    parts.append(f"{seconds}s")
-    return " ".join(parts)
-
-
-def format_bytes(num: int) -> str:
-    step_unit = 1024
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if num < step_unit:
-            return f"{num:.2f} {unit}" if unit != "B" else f"{num} {unit}"
-        num /= step_unit
-    return f"{num:.2f} PB"
-
-
-def health_emoji(value: float, warn: float, bad: float) -> str:
-    if value >= bad:
-        return "🔴"
-    if value >= warn:
-        return "🟠"
-    return "🟢"
-
-
-def safe_count_channels(guilds):
-    text_channels = 0
-    voice_channels = 0
-    categories = 0
-    forums = 0
-    stages = 0
-
-    for guild in guilds:
-        for channel in guild.channels:
-            if isinstance(channel, discord.TextChannel):
-                text_channels += 1
-            elif isinstance(channel, discord.VoiceChannel):
-                voice_channels += 1
-            elif isinstance(channel, discord.CategoryChannel):
-                categories += 1
-            elif isinstance(channel, discord.ForumChannel):
-                forums += 1
-            elif isinstance(channel, discord.StageChannel):
-                stages += 1
-
-    return text_channels, voice_channels, categories, forums, stages
-
-
 @bot.hybrid_command(name="diagnose", description="Extremely advanced diagnostics for Pulse")
 async def diagnose(ctx: commands.Context):
     try:
@@ -749,16 +932,12 @@ async def diagnose(ctx: commands.Context):
 
     process = psutil.Process(os.getpid())
 
-    # Prime CPU reading for a more accurate result
     psutil.cpu_percent(interval=None)
     cpu_percent = psutil.cpu_percent(interval=0.3)
 
     virtual_mem = psutil.virtual_memory()
-
-    # Railway / Linux-safe disk path
     disk_path = "C:\\" if os.name == "nt" else "/"
     disk_usage = psutil.disk_usage(disk_path)
-
     swap_mem = psutil.swap_memory()
 
     process_mem = process.memory_info()
@@ -768,7 +947,6 @@ async def diagnose(ctx: commands.Context):
 
     bot_latency_ms = round(bot.latency * 1000)
 
-    # Discord REST/API latency test
     api_latency_ms = None
     api_status = "Unknown"
     try:
@@ -936,20 +1114,12 @@ async def diagnose(ctx: commands.Context):
         inline=False
     )
 
-    if warnings:
-        warning_text = "\n".join(f"• {warning}" for warning in warnings[:8])
-    else:
-        warning_text = "• No active issues detected."
-
-    embed.add_field(
-        name="🚨 Alerts",
-        value=warning_text,
-        inline=False
-    )
-
+    warning_text = "\n".join(f"• {warning}" for warning in warnings[:8]) if warnings else "• No active issues detected."
+    embed.add_field(name="🚨 Alerts", value=warning_text, inline=False)
     embed.set_footer(text="Pulse Advanced Diagnostic Engine • Internal health sweep complete")
 
     await ctx.send(embed=embed)
+
 
 @bot.command()
 async def test(ctx):
@@ -965,7 +1135,8 @@ async def profile(ctx, user: discord.Member = None):
     ensure_rep_user(user_id)
 
     xp = xp_data[user_id]["xp"]
-    level = xp_data[user_id]["level"]
+    level = get_level_from_xp(xp)
+    xp_data[user_id]["level"] = level
     rep = rep_data[user_id]["rep"]
 
     current_level_xp = get_xp_for_level(level)
@@ -985,6 +1156,7 @@ async def profile(ctx, user: discord.Member = None):
     embed.add_field(name="📈 Progress", value=f"{progress}/{needed} XP", inline=False)
     embed.set_footer(text=f"Requested by {ctx.author.display_name}")
 
+    save_json(XP_FILE, xp_data)
     await ctx.send(embed=embed)
 
 
@@ -996,9 +1168,13 @@ async def rank(ctx, user: discord.Member = None):
     ensure_xp_user(user_id)
 
     xp = xp_data[user_id]["xp"]
-    level = xp_data[user_id]["level"]
+    level = get_level_from_xp(xp)
+    xp_data[user_id]["level"] = level
+
     current_level_xp = get_xp_for_level(level)
     next_level_xp = get_xp_for_level(level + 1)
+
+    save_json(XP_FILE, xp_data)
 
     await ctx.send(
         f"📊 {target.mention}\n"
@@ -1010,7 +1186,11 @@ async def rank(ctx, user: discord.Member = None):
 
 @bot.hybrid_command(name="leaderboard", description="Top XP users")
 async def leaderboard(ctx):
-    sorted_users = sorted(xp_data.items(), key=lambda x: x[1]["xp"], reverse=True)[:10]
+    sorted_users = sorted(
+        xp_data.items(),
+        key=lambda x: int(x[1].get("xp", 0)),
+        reverse=True
+    )[:10]
 
     desc = ""
     for i, (user_id, data) in enumerate(sorted_users, 1):
@@ -1019,7 +1199,7 @@ async def leaderboard(ctx):
             name = user.name
         except Exception:
             name = "Unknown"
-        desc += f"**{i}.** {name} — {data['xp']} XP\n"
+        desc += f"**{i}.** {name} — {int(data.get('xp', 0))} XP\n"
 
     embed = discord.Embed(
         title="🏆 Leaderboard",
@@ -1028,7 +1208,9 @@ async def leaderboard(ctx):
     )
     await ctx.send(embed=embed)
 
-
+# =========================
+# GENERAL / UTILITY COMMANDS
+# =========================
 @bot.hybrid_command(name="ping", description="Check if Pulse is alive")
 async def ping(ctx):
     latency = round(bot.latency * 1000)
@@ -1063,88 +1245,10 @@ async def botinfo(ctx):
     await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="help", description="Show Pulse commands")
-async def help_command(ctx):
-    embed = discord.Embed(
-        title="📘 Pulse Commands",
-        description="Here are the current commands for Pulse.",
-        color=discord.Color.blurple()
-    )
-
-    embed.add_field(
-        name="General",
-        value=(
-            "`/ping` `p!ping`\n"
-            "`/hello` `p!hello`\n"
-            "`/uptime` `p!uptime`\n"
-            "`/botinfo` `p!botinfo`\n"
-            "`/help` `p!help`\n"
-            "`/profile` `p!profile`\n"
-            "`/rank` `p!rank`\n"
-            "`/leaderboard` `p!leaderboard`\n"
-            "`/avatar` `p!avatar`\n"
-            "`/serverinfo` `p!serverinfo`\n"
-            "`/userinfo` `p!userinfo`\n"
-            "`/membercount` `p!membercount`\n"
-            "`/banner` `p!banner`\n"
-            "`/roleinfo` `p!roleinfo`"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="Fun",
-        value=(
-            "`/dadjoke` `p!dadjoke`\n"
-            "`/clown` `p!clown`\n"
-            "`/ship` `p!ship`\n"
-            "`/roast` `p!roast`\n"
-            "`/meme` `p!meme`\n"
-            "`/8ball` `p!8ball`\n"
-            "`/coinflip` `p!coinflip`\n"
-            "`/choose` `p!choose`\n"
-            "`/rate` `p!rate`"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="Community",
-        value=(
-            "`p!rep` `p!repcheck` `p!reptop`\n"
-            "`/suggest` `p!suggest`\n"
-            "`/remind` `p!remind`"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="Tickets",
-        value=(
-            "`/ticketpanel` `/adduser` `/removeuser` `/rename`"
-        ),
-        inline=False
-    )
-
-    embed.add_field(
-        name="Staff Only",
-        value=(
-            "`/xpreset` `/xpadd` `/removexp`\n"
-            "`/say` `/embed` `/lock` `/unlock` `/unlockall`\n"
-            "`/purge` `/warn` `/warnings` `/clearwarnings`"
-        ),
-        inline=False
-    )
-
-    await ctx.send(embed=embed)
-
-# =========================
-# UTILITY COMMANDS
-# =========================
 @bot.hybrid_command(name="calc", description="Calculate a math expression")
 async def calc(ctx, *, expression: str):
     try:
-        result = eval(expression, {"__builtins__": {}})
+        result = safe_eval_expression(expression)
         await ctx.send(f"🧮 Result: **{result}**")
     except Exception:
         await ctx.send("❌ Invalid expression.")
@@ -1221,9 +1325,7 @@ async def serverinfo(ctx):
 
     await ctx.send(embed=embed)
 
-# =========================
-# NEW COMMANDS
-# =========================
+
 @bot.hybrid_command(name="membercount", description="Show the server member count")
 async def membercount(ctx):
     if ctx.guild is None:
@@ -1278,330 +1380,8 @@ async def roleinfo(ctx, *, role: discord.Role):
 
     await ctx.send(embed=embed)
 
-# =========================
-# FUN COMMANDS
-# =========================
-@bot.hybrid_command(name="dadjoke", description="Get a dad joke")
-async def dadjoke(ctx):
-    jokes = [
-        "I only know 25 letters of the alphabet… I don’t know y.",
-        "Why did the scarecrow win an award? Because he was outstanding in his field.",
-        "I told my computer I needed a break… it said no problem — it froze.",
-        "Why don’t skeletons fight each other? They don’t have the guts.",
-        "I’m reading a book about anti-gravity… it’s impossible to put down."
-    ]
-    await ctx.send(random.choice(jokes))
 
-
-@bot.hybrid_command(name="clown", description="Call someone a clown 🤡")
-async def clown(ctx, user: discord.Member):
-    await ctx.send(f"{user.mention} certified clown 🤡")
-
-
-@bot.hybrid_command(name="ship", description="Ship two users together")
-async def ship(ctx, user1: discord.Member, user2: discord.Member):
-    percentage = random.randint(0, 100)
-
-    if percentage > 80:
-        msg = "💖 PERFECT MATCH"
-    elif percentage > 50:
-        msg = "💕 pretty solid"
-    else:
-        msg = "💀 yeah... no"
-
-    await ctx.send(
-        f"{user1.mention} ❤️ {user2.mention}\n**{percentage}%** — {msg}"
-    )
-
-
-@bot.hybrid_command(name="roast", description="Roast someone 💀")
-async def roast(ctx, user: discord.Member = None):
-    target = user or ctx.author
-
-    roasts = [
-        f"{target.mention} you have the personality of a loading screen",
-        f"{target.mention} you’re not dumb, just... aggressively average",
-        f"{target.mention} your brain runs on low battery mode 24/7 🔋",
-        f"{target.mention} you make WiFi signals look strong",
-        f"{target.mention} you’re like a software bug… nobody knows how you got here",
-        f"{target.mention} you’d lose a staring contest with a wall",
-        f"{target.mention} you have the confidence of someone who’s never been correct",
-        f"{target.mention} you’re the human version of a typo",
-        f"{target.mention} you don’t need a GPS… you’re already lost",
-        f"{target.mention} you bring absolutely nothing to the table… not even snacks",
-        f"{target.mention} your thoughts take a detour before arriving",
-        f"{target.mention} you make silence feel productive",
-        f"{target.mention} you’re like a tutorial nobody asked for",
-        f"{target.mention} you got the brainpower of a disconnected mouse",
-        f"{target.mention} your logic expired years ago",
-        f"{target.mention} you’re running on vibes and no updates",
-        f"{target.mention} you’re proof that autocorrect gives up sometimes",
-        f"{target.mention} you couldn’t pour water out of a boot with instructions",
-        f"{target.mention} you’re the reason instructions exist",
-        f"{target.mention} you’re not slow… you just take scenic routes mentally",
-        f"{target.mention} you’ve got two brain cells and they’re fighting for third place",
-        f"{target.mention} you make buffering look fast",
-        f"{target.mention} you’re like a broken pencil… pointless",
-        f"{target.mention} you bring confusion wherever you go",
-        f"{target.mention} your decisions need a patch update",
-        f"{target.mention} your vibe is “I tried nothing and I’m out of ideas”",
-        f"{target.mention} you’ve got main character confidence with NPC logic",
-        f"{target.mention} you got the strategic thinking of a coin flip",
-        f"{target.mention} you make wrong decisions confidently",
-    ]
-
-    await ctx.send(random.choice(roasts))
-
-
-@bot.hybrid_command(name="meme", description="Get a random meme")
-async def meme(ctx):
-    await ctx.defer()
-
-    url = "https://meme-api.com/gimme"
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    await ctx.send("❌ Failed to fetch a meme. Try again.")
-                    return
-
-                data = await resp.json()
-
-        embed = discord.Embed(
-            title=data.get("title", "Random Meme"),
-            color=discord.Color.blurple()
-        )
-        embed.set_image(url=data["url"])
-        embed.set_footer(text=f"👍 {data.get('ups', 0)} | r/{data.get('subreddit', 'unknown')}")
-
-        await ctx.send(embed=embed)
-
-    except Exception as e:
-        await ctx.send(f"❌ Error fetching meme:\n`{e}`")
-
-
-@bot.hybrid_command(name="8ball", description="Ask the magic 8-ball a question")
-async def eight_ball(ctx, *, question: str):
-    responses = [
-        "Yes.",
-        "No.",
-        "Maybe.",
-        "Definitely.",
-        "Absolutely not.",
-        "Without a doubt.",
-        "Very likely.",
-        "Probably not.",
-        "Ask again later.",
-        "The signs point to yes."
-    ]
-    await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {random.choice(responses)}")
-
-
-@bot.hybrid_command(name="coinflip", description="Flip a coin")
-async def coinflip(ctx):
-    await ctx.send(f"🪙 The coin landed on **{random.choice(['Heads', 'Tails'])}**!")
-
-
-@bot.hybrid_command(name="choose", description="Choose from options separated by commas")
-async def choose(ctx, *, options: str):
-    choices = [choice.strip() for choice in options.split(",") if choice.strip()]
-    if len(choices) < 2:
-        await ctx.send("❌ Give me at least 2 options separated by commas.")
-        return
-
-    await ctx.send(f"🤔 I choose: **{random.choice(choices)}**")
-
-
-@bot.hybrid_command(name="rate", description="Rate something from 1 to 10")
-async def rate(ctx, *, thing: str):
-    score = random.randint(1, 10)
-    await ctx.send(f"📊 I rate **{thing}** a **{score}/10**")
-
-# =========================
-# COMMUNITY COMMANDS
-# =========================
-@bot.hybrid_command(name="suggest", description="Send a suggestion")
-async def suggest(ctx, *, suggestion: str):
-    channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
-
-    if channel is None or not isinstance(channel, discord.TextChannel):
-        await ctx.send("❌ Suggestion channel not found. Check `SUGGESTION_CHANNEL_ID`.")
-        return
-
-    embed = discord.Embed(
-        title="💡 New Suggestion",
-        description=suggestion,
-        color=discord.Color.gold(),
-        timestamp=datetime.now(timezone.utc)
-    )
-    embed.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
-    embed.set_footer(text=f"User ID: {ctx.author.id}")
-
-    msg = await channel.send(embed=embed)
-    await msg.add_reaction("✅")
-    await msg.add_reaction("❌")
-
-    await ctx.send("✅ Your suggestion has been sent!")
-
-
-@bot.hybrid_command(name="remind", description="Set a reminder")
-async def remind(ctx, time: str, *, reminder: str):
-    seconds = parse_duration(time)
-    if seconds is None:
-        await ctx.send("❌ Invalid time format. Use `10s`, `5m`, `2h`, or `1d`.")
-        return
-
-    await ctx.send(
-        f"⏰ Okay {ctx.author.mention}, I’ll remind you in **{time}**: {reminder}"
-    )
-
-    await asyncio.sleep(seconds)
-
-    try:
-        await ctx.author.send(f"⏰ Reminder: **{reminder}**")
-    except discord.Forbidden:
-        if ctx.channel:
-            await ctx.channel.send(f"{ctx.author.mention} ⏰ Reminder: **{reminder}**")
-
-# =========================
-# STAFF COMMANDS
-# =========================
-@bot.tree.command(name="pressure", description="Control the pressure response feature")
-@app_commands.describe(mode="on, off, or toggle")
-async def pressure_slash(interaction: discord.Interaction, mode: str = None):
-    global pressure_enabled
-
-    # 🔒 Role check
-    role = discord.utils.get(interaction.user.roles, name=SUPPORT_ROLE_NAME)
-    if role is None:
-        await interaction.response.send_message(
-            f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this.",
-            ephemeral=True
-        )
-        return
-
-    # 📊 No argument → show status
-    if mode is None:
-        status = "ON" if pressure_enabled else "OFF"
-        await interaction.response.send_message(
-            f"⚡ Pressure response is currently **{status}**.",
-            ephemeral=True
-        )
-        return
-
-    mode = mode.lower()
-
-    # 🔘 Handle modes
-    if mode in ["on", "enable"]:
-        pressure_enabled = True
-        msg = "🟢 Pressure responses enabled."
-    elif mode in ["off", "disable"]:
-        pressure_enabled = False
-        msg = "🔴 Pressure responses disabled."
-    elif mode == "toggle":
-        pressure_enabled = not pressure_enabled
-        msg = f"⚡ Pressure responses {'enabled' if pressure_enabled else 'disabled'}."
-    else:
-        await interaction.response.send_message(
-            "❌ Use `on`, `off`, or `toggle`.",
-            ephemeral=True
-        )
-        return
-
-    await interaction.response.send_message(msg)
-    
-@bot.hybrid_command(name="xpreset", description="Reset all XP and remove level roles")
-@commands.guild_only()
-async def xpreset(ctx):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    await ctx.defer()
-
-    await remove_all_level_roles()
-    xp_data.clear()
-    save_json(XP_FILE, xp_data)
-
-    channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-    if channel:
-        await channel.send("🔄 XP has been manually reset.")
-
-    await ctx.send("✅ XP reset completed.")
-
-
-@bot.hybrid_command(name="xpadd", description="Add XP to a user")
-@commands.guild_only()
-async def xpadd(ctx, user: discord.Member, amount: int):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    if amount <= 0:
-        await ctx.send("❌ XP amount must be greater than 0.")
-        return
-
-    user_id = str(user.id)
-    ensure_xp_user(user_id)
-
-    old_level = xp_data[user_id]["level"]
-    xp_data[user_id]["xp"] += amount
-    new_level = get_level_from_xp(xp_data[user_id]["xp"])
-    xp_data[user_id]["level"] = new_level
-    save_json(XP_FILE, xp_data)
-
-    msg = f"✅ Added **{amount} XP** to {user.mention}."
-
-    if new_level > old_level:
-        msg += f"\n🎉 They leveled up to **Level {new_level}**!"
-
-        channel = bot.get_channel(LEVEL_UP_CHANNEL_ID)
-        if channel:
-            await channel.send(f"🎉 {user.mention} leveled up to **Level {new_level}**!")
-
-        await apply_level_roles(user, old_level, new_level)
-
-    await ctx.send(msg)
-
-
-@bot.hybrid_command(name="removexp", description="Remove XP from a user")
-@commands.guild_only()
-async def removexp(ctx, member: discord.Member, amount: int):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    if amount <= 0:
-        await ctx.send("❌ XP amount must be greater than 0.")
-        return
-
-    user_id = str(member.id)
-    ensure_xp_user(user_id)
-
-    xp_data[user_id]["xp"] = max(0, xp_data[user_id]["xp"] - amount)
-    xp_data[user_id]["level"] = get_level_from_xp(xp_data[user_id]["xp"])
-    save_json(XP_FILE, xp_data)
-
-    await ctx.send(
-        f"✅ Removed **{amount} XP** from {member.mention}.\n"
-        f"They now have **{xp_data[user_id]['xp']} XP**."
-    )
-
-
-@bot.hybrid_command(name="say", description="Make Pulse send a message")
-@commands.guild_only()
-async def say(ctx, *, message: str):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    await ctx.send("✅ Sent.")
-    await ctx.channel.send(message)
-
-
-@bot.hybrid_command(name="embed", description="Send an embed message")
-@commands.guild_only()
+@bot.hybrid_command(name="embed", description="Send a simple embed")
 async def embed_command(ctx, title: str, *, description: str):
     if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
@@ -1613,83 +1393,146 @@ async def embed_command(ctx, title: str, *, description: str):
         color=discord.Color.blurple(),
         timestamp=datetime.now(timezone.utc)
     )
-    await ctx.send("✅ Embed sent.")
-    await ctx.channel.send(embed=embed)
+    await ctx.send(embed=embed)
 
 
-@bot.hybrid_command(name="lock", description="Lock the current channel")
-@commands.guild_only()
-async def lock(ctx):
+@bot.hybrid_command(name="say", description="Make Pulse say something")
+async def say(ctx, *, message: str):
     if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
         return
 
-    if not isinstance(ctx.channel, discord.TextChannel):
-        await ctx.send("❌ This command only works in text channels.")
+    await ctx.send(message)
+
+
+@bot.hybrid_command(name="remind", description="Set a reminder")
+async def remind(ctx, duration: str, *, reminder_text: str):
+    seconds = parse_duration(duration)
+    if seconds is None:
+        await ctx.send("❌ Use a valid duration like `10s`, `5m`, `2h`, or `1d`.")
         return
 
-    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-    overwrite.send_messages = False
-    await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"⏰ Okay {ctx.author.mention}, I’ll remind you in **{duration}**.")
 
-    await ctx.send("🔒 Channel locked.")
+    async def reminder_task():
+        await asyncio.sleep(seconds)
+        try:
+            await ctx.send(f"🔔 {ctx.author.mention} reminder: {reminder_text}")
+        except Exception:
+            pass
+
+    bot.loop.create_task(reminder_task())
 
 
-@bot.hybrid_command(name="unlock", description="Unlock the current channel")
-@commands.guild_only()
-async def unlock(ctx):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
+@bot.hybrid_command(name="suggest", description="Send a suggestion")
+async def suggest(ctx, *, suggestion: str):
+    channel = bot.get_channel(SUGGESTION_CHANNEL_ID)
+
+    if channel is None or not isinstance(channel, discord.TextChannel):
+        await ctx.send("❌ Suggestion channel not found.")
         return
 
-    if not isinstance(ctx.channel, discord.TextChannel):
-        await ctx.send("❌ This command only works in text channels.")
+    embed = discord.Embed(
+        title="💡 New Suggestion",
+        description=suggestion,
+        color=discord.Color.blurple(),
+        timestamp=datetime.now(timezone.utc)
+    )
+    embed.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
+
+    msg = await channel.send(embed=embed)
+    try:
+        await msg.add_reaction("👍")
+        await msg.add_reaction("👎")
+    except Exception:
+        pass
+
+    await ctx.send("✅ Your suggestion has been submitted.")
+
+# =========================
+# FUN COMMANDS
+# =========================
+dad_jokes = [
+    "Why don't skeletons fight each other? They don't have the guts.",
+    "I only know 25 letters of the alphabet. I don't know y.",
+    "What do you call fake spaghetti? An impasta.",
+    "Why did the scarecrow win an award? Because he was outstanding in his field."
+]
+
+roasts = [
+    "You bring everyone so much joy... when you leave the room.",
+    "I'd agree with you, but then we'd both be wrong.",
+    "You're proof that even Discord has lag in real life.",
+    "You have something on your chin... no, the third one down."
+]
+
+eight_ball_responses = [
+    "Yes.",
+    "No.",
+    "Maybe.",
+    "Definitely.",
+    "Absolutely not.",
+    "Ask again later.",
+    "Without a doubt.",
+    "Very unlikely.",
+    "Signs point to yes.",
+    "I wouldn't count on it."
+]
+
+@bot.hybrid_command(name="dadjoke", description="Get a dad joke")
+async def dadjoke(ctx):
+    await ctx.send(f"😂 {random.choice(dad_jokes)}")
+
+
+@bot.hybrid_command(name="clown", description="Call someone a clown")
+async def clown(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    await ctx.send(f"🤡 {member.mention} has officially been declared a clown.")
+
+
+@bot.hybrid_command(name="ship", description="Ship two users")
+async def ship(ctx, user1: discord.Member, user2: discord.Member):
+    score = random.randint(1, 100)
+    if score >= 90:
+        verdict = "soulmates fr"
+    elif score >= 70:
+        verdict = "kinda cute ngl"
+    elif score >= 40:
+        verdict = "could work maybe"
+    else:
+        verdict = "uh... maybe as friends"
+
+    await ctx.send(f"💖 {user1.mention} + {user2.mention} = **{score}%**\nVerdict: **{verdict}**")
+
+
+@bot.hybrid_command(name="roast", description="Roast a user")
+async def roast(ctx, member: discord.Member = None):
+    member = member or ctx.author
+    await ctx.send(f"🔥 {member.mention} — {random.choice(roasts)}")
+
+
+@bot.hybrid_command(name="8ball", with_app_command=True, description="Ask the magic 8-ball a question")
+async def eightball(ctx, *, question: str):
+    await ctx.send(f"🎱 **Question:** {question}\n**Answer:** {random.choice(eight_ball_responses)}")
+
+
+@bot.hybrid_command(name="coinflip", description="Flip a coin")
+async def coinflip(ctx):
+    await ctx.send(f"🪙 It landed on **{random.choice(['Heads', 'Tails'])}**.")
+
+
+@bot.hybrid_command(name="choose", description="Choose between options separated by |")
+async def choose(ctx, *, options: str):
+    parts = [p.strip() for p in options.split("|") if p.strip()]
+    if len(parts) < 2:
+        await ctx.send("❌ Give me at least two options separated by `|`.")
         return
 
-    overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-    overwrite.send_messages = True
-    await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
+    await ctx.send(f"🤔 I choose: **{random.choice(parts)}**")
 
-    await ctx.send("🔓 Channel unlocked.")
-
-
-@bot.hybrid_command(name="unlockall", description="Unlock all text channels")
-@commands.guild_only()
-async def unlockall(ctx):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    await ctx.defer()
-
-    for channel in ctx.guild.text_channels:
-        overwrite = channel.overwrites_for(ctx.guild.default_role)
-        overwrite.send_messages = True
-        await channel.set_permissions(ctx.guild.default_role, overwrite=overwrite)
-
-    await ctx.send("🔓 All text channels have been unlocked.")
-
-
-@bot.hybrid_command(name="purge", description="Delete messages")
-@commands.guild_only()
-async def purge(ctx, amount: int):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
-    if not isinstance(ctx.channel, discord.TextChannel):
-        await ctx.send("❌ This command only works in text channels.")
-        return
-
-    if amount < 1:
-        await ctx.send("❌ Amount must be at least 1.")
-        return
-
-    await ctx.defer()
-    deleted = await ctx.channel.purge(limit=amount)
-    await ctx.send(f"🧹 Deleted **{len(deleted)}** message(s).")
-
-
+# =========================
+# WARNINGS / MODERATION
+# =========================
 @bot.hybrid_command(name="warn", description="Warn a user")
 @commands.guild_only()
 async def warn(ctx, user: discord.Member, *, reason: str = "No reason provided"):
@@ -1697,28 +1540,13 @@ async def warn(ctx, user: discord.Member, *, reason: str = "No reason provided")
         await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
         return
 
-    count = add_warning(ctx.guild.id, user.id)
-
-    embed = discord.Embed(
-        title="⚠️ User Warned",
-        color=discord.Color.orange(),
-        timestamp=datetime.now(timezone.utc)
-    )
-    embed.add_field(name="User", value=user.mention, inline=True)
-    embed.add_field(name="Moderator", value=ctx.author.mention, inline=True)
-    embed.add_field(name="Reason", value=reason, inline=False)
-    embed.add_field(name="Total Warnings", value=str(count), inline=False)
-
-    await ctx.send(embed=embed)
+    total = add_warning(ctx.guild.id, user.id)
+    await ctx.send(f"⚠️ Warned {user.mention}.\n**Reason:** {reason}\nThey now have **{total}** warning(s).")
 
 
 @bot.hybrid_command(name="warnings", description="Check a user's warnings")
 @commands.guild_only()
 async def warnings(ctx, user: discord.Member):
-    if not isinstance(ctx.author, discord.Member) or not is_staff(ctx.author):
-        await ctx.send(f"❌ You need the **{SUPPORT_ROLE_NAME}** role to use this command.")
-        return
-
     count = get_warning_count(ctx.guild.id, user.id)
     await ctx.send(f"⚠️ {user.mention} has **{count}** warning(s).")
 
@@ -1732,6 +1560,92 @@ async def clearwarnings(ctx, user: discord.Member):
 
     clear_warning_count(ctx.guild.id, user.id)
     await ctx.send(f"✅ Cleared warnings for {user.mention}.")
+
+# =========================
+# HELP COMMAND
+# =========================
+@bot.hybrid_command(name="help", description="Show Pulse commands")
+async def help_command(ctx):
+    embed = discord.Embed(
+        title="📘 Pulse Commands",
+        description="Here are the current commands for Pulse.",
+        color=discord.Color.blurple()
+    )
+
+    embed.add_field(
+        name="General",
+        value=(
+            "`/ping` `p!ping`\n"
+            "`/hello` `p!hello`\n"
+            "`/uptime` `p!uptime`\n"
+            "`/botinfo` `p!botinfo`\n"
+            "`/help` `p!help`\n"
+            "`/profile` `p!profile`\n"
+            "`/rank` `p!rank`\n"
+            "`/leaderboard` `p!leaderboard`\n"
+            "`/avatar` `p!avatar`\n"
+            "`/serverinfo` `p!serverinfo`\n"
+            "`/userinfo` `p!userinfo`\n"
+            "`/membercount` `p!membercount`\n"
+            "`/banner` `p!banner`\n"
+            "`/roleinfo` `p!roleinfo`\n"
+            "`/calc` `p!calc`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Fun",
+        value=(
+            "`/dadjoke` `p!dadjoke`\n"
+            "`/clown` `p!clown`\n"
+            "`/ship` `p!ship`\n"
+            "`/roast` `p!roast`\n"
+            "`/8ball` `p!8ball`\n"
+            "`/coinflip` `p!coinflip`\n"
+            "`/choose` `p!choose`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Utility / Community",
+        value=(
+            "`/suggest` `p!suggest`\n"
+            "`/remind` `p!remind`\n"
+            "`/embed` `p!embed`\n"
+            "`p!rep`\n"
+            "`p!repcheck`\n"
+            "`p!reptop`\n"
+            "`/diagnose` `p!diagnose`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Moderation",
+        value=(
+            "`/warn` `p!warn`\n"
+            "`/warnings` `p!warnings`\n"
+            "`/clearwarnings` `p!clearwarnings`\n"
+            "`/say` `p!say`"
+        ),
+        inline=False
+    )
+
+    embed.add_field(
+        name="Tickets",
+        value=(
+            "`/ticketpanel`\n"
+            "`/adduser`\n"
+            "`/removeuser`\n"
+            "`/rename`"
+        ),
+        inline=False
+    )
+
+    embed.set_footer(text="Pulse • slash + prefix hybrid system")
+    await ctx.send(embed=embed)
 
 # =========================
 # TICKET COMMANDS
