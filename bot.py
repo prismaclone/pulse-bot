@@ -867,15 +867,6 @@ async def give_rep(ctx, member: discord.Member):
     ensure_rep_user(giver_id)
     ensure_rep_user(receiver_id)
 
-    now = time.time()
-
-    if now - rep_data[giver_id]["last_given"] < REP_COOLDOWN:
-        remaining = int(REP_COOLDOWN - (now - rep_data[giver_id]["last_given"]))
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-        await ctx.send(f"⏳ You can give rep again in **{hours}h {minutes}m**.")
-        return
-
     rep_data[receiver_id]["rep"] += 1
     rep_data[giver_id]["last_given"] = now
     save_json(REP_FILE, rep_data)
